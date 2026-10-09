@@ -30,7 +30,7 @@ Ajustes generales: activar/desactivar todo, solo alarmas del Reloj (activado por
 
 ## Instalación en el Galaxy S25 FE
 
-1. **Conseguí el APK.** Si compilaste vos, está en `build/sg.apk` (ver [Compilar](#compilar-desde-el-código)). Si lo bajás de GitHub, usá el archivo `sg.apk` de la release o del branch indicado.
+1. **Conseguí el APK.** Ya viene compilado y firmado en [`dist/sueno-guia.apk`](dist/sueno-guia.apk): abrí ese archivo en GitHub desde el celu y tocá **Download** (o "View raw"). Si compilás vos, queda en `build/sg.apk` (ver [Compilar](#compilar-desde-el-código)).
 2. **Copialo al teléfono** (cable USB, Google Drive, Bluetooth, lo que te sea más cómodo).
 3. **Permití instalar desconocidas.** Al tocar el APK, Android te lo va a pedir. Activá **"Instalar apps desconocidas"** para la app desde la que lo abrís (Mis archivos o Chrome).
 4. **Instalá.** Tocá el APK y después **Instalar**.

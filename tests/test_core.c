@@ -86,6 +86,7 @@ static void test_core_window_and_horizon(void) {
     SgState s;
     SgCmdList out;
     SgObs o;
+    const SgCmd *c;
     int64_t T, now;
     sg_tz_set(TZ_BA);
     sg_state_defaults(&s);
@@ -100,13 +101,14 @@ static void test_core_window_and_horizon(void) {
     SG_CHECK(count_type(&out, SG_CMD_SCHEDULE) == 1);
     SG_CHECK(find(&out, SG_CMD_SCHEDULE, SG_ALARM_RECHECK) != NULL);
     SG_CHECK(find(&out, SG_CMD_SCHEDULE, SG_ALARM_F1) == NULL);
-    /* 40 h away: stored but not scheduled */
+    /* 40 h away: F1 still scheduled at T - lead, not left to RECHECK (K3) */
     T = sg_at(D_FRI, 420);
     now = T - SG_MIN_TO_MS(2400);
     o = obs(now, T, SG_CREATOR_ALLOWED);
     SG_CHECK(sg_core_relevant(&s, &o) == SG_REL_HORIZON);
     SG_CHECK(sg_core_sync(&s, &o, SG_REASON_BROADCAST, &out) == SG_OK);
-    SG_CHECK(find(&out, SG_CMD_SCHEDULE, SG_ALARM_F1) == NULL);
+    c = find(&out, SG_CMD_SCHEDULE, SG_ALARM_F1);
+    SG_CHECK(c != NULL && c->a[1] == sg_core_f1_at(&s, T) && c->a[2] == SG_SCHED_EXACT_IDLE);
     /* exactly 36 h: accepted; 36 h + 1 min: horizon */
     now = T - SG_MIN_TO_MS(SG_MAX_HORIZON_MIN);
     o = obs(now, T, SG_CREATOR_ALLOWED);
@@ -203,7 +205,7 @@ static void test_core_late_debounce_f3(void) {
     SG_CHECK(sg_core_sync(&s, &o, SG_REASON_BROADCAST, &out) == SG_OK);
     SG_CHECK(out.dropped == 0);
     c = find(&out, SG_CMD_SCHEDULE, SG_ALARM_DEBOUNCE);
-    SG_CHECK(c != NULL && c->a[1] == due && c->a[2] == SG_SCHED_EXACT);
+    SG_CHECK(c != NULL && c->a[1] == due && c->a[2] == SG_SCHED_EXACT_IDLE);
     SG_CHECK(find(&out, SG_CMD_SCHEDULE, SG_ALARM_F1) == NULL);
     SG_CHECK(s.debounce_due_ms == due && s.debounce_T == T);
     /* fire at the due time: 6 h 20 min available after latency, floored to 390 */
@@ -842,6 +844,137 @@ static void test_core_avail_min(void) {
 }
 
 /* Every core test computes local times with sg_at(): set the zone before each one. */
+/* Number of NOTIFY commands of one kind in the list. */
+static int32_t count_notify(const SgCmdList *l, int kind) {
+    int32_t i, n = 0;
+    for (i = 0; i < l->count; i++) {
+        if (l->cmd[i].type == SG_CMD_NOTIFY && l->cmd[i].a[0] == kind) {
+            n++;
+        }
+    }
+    return n;
+}
+
+/* K1: reboot 15 min after F1_at with T unchanged -> F1 scheduled now, then posted. */
+static void test_core_reboot_within_grace_f1_now(void) {
+    SgState s;
+    SgCmdList out;
+    const SgCmd *c;
+    SgObs o;
+    int64_t T = sg_at(D_FRI, 420);
+    int64_t boot = sg_at(D_THU, 1305);     /* 21:45 = F1_at + 15 min */
+    sg_tz_set(TZ_BA);
+    sg_state_defaults(&s);
+    o = obs(sg_at(D_THU, 900), T, SG_CREATOR_ALLOWED);
+    SG_CHECK(sg_core_sync(&s, &o, SG_REASON_BROADCAST, &out) == SG_OK);
+    SG_CHECK(find(&out, SG_CMD_SCHEDULE, SG_ALARM_F1) != NULL);
+    /* reboot wipes the alarms; the persisted state still holds T */
+    o = obs(boot, T, SG_CREATOR_ALLOWED);
+    SG_CHECK(sg_core_sync(&s, &o, SG_REASON_BOOT, &out) == SG_OK);
+    SG_CHECK(out.dropped == 0);
+    c = find(&out, SG_CMD_SCHEDULE, SG_ALARM_F1);
+    SG_CHECK(c != NULL && c->a[1] == boot && c->a[2] == SG_SCHED_EXACT_IDLE);
+    SG_CHECK(find(&out, SG_CMD_SCHEDULE, SG_ALARM_DEBOUNCE) == NULL);
+    /* the recovered F1 alarm posts the reminder */
+    o = obs(boot, T, SG_CREATOR_ALLOWED);
+    SG_CHECK(sg_core_alarm_fired(&s, &o, SG_ALARM_F1, &out) == SG_OK);
+    SG_CHECK(count_notify(&out, SG_NK_F1) == 1);
+    SG_CHECK(s.last_f1_for_T == T);
+}
+
+/* K1: reboot 50 min after F1_at with T unchanged -> one debounce, exactly one F3,
+ * and later RECHECKs for the same T stay silent. */
+static void test_core_reboot_late_one_f3(void) {
+    SgState s;
+    SgCmdList out;
+    const SgCmd *c;
+    SgObs o;
+    int64_t T = sg_at(D_FRI, 420);
+    int64_t boot = sg_at(D_THU, 1340);     /* 22:20 = F1_at + 50 min */
+    int64_t due = boot + DEBOUNCE_MS;
+    sg_tz_set(TZ_BA);
+    sg_state_defaults(&s);
+    o = obs(sg_at(D_THU, 900), T, SG_CREATOR_ALLOWED);
+    SG_CHECK(sg_core_sync(&s, &o, SG_REASON_BROADCAST, &out) == SG_OK);
+    o = obs(boot, T, SG_CREATOR_ALLOWED);
+    SG_CHECK(sg_core_sync(&s, &o, SG_REASON_BOOT, &out) == SG_OK);
+    SG_CHECK(out.dropped == 0);
+    SG_CHECK(find(&out, SG_CMD_SCHEDULE, SG_ALARM_F1) == NULL);
+    c = find(&out, SG_CMD_SCHEDULE, SG_ALARM_DEBOUNCE);
+    SG_CHECK(c != NULL && c->a[1] == due && c->a[2] == SG_SCHED_EXACT_IDLE);
+    /* debounce fires: exactly one F3 */
+    o = obs(due, T, SG_CREATOR_ALLOWED);
+    SG_CHECK(sg_core_alarm_fired(&s, &o, SG_ALARM_DEBOUNCE, &out) == SG_OK);
+    SG_CHECK(count_notify(&out, SG_NK_F3) == 1);
+    SG_CHECK(s.last_f1_for_T == T);
+    /* hourly RECHECKs for the same T: no new debounce, no further F3 */
+    o = obs(sg_at(D_THU, 1400), T, SG_CREATOR_ALLOWED);
+    SG_CHECK(sg_core_alarm_fired(&s, &o, SG_ALARM_RECHECK, &out) == SG_OK);
+    SG_CHECK(find(&out, SG_CMD_SCHEDULE, SG_ALARM_DEBOUNCE) == NULL);
+    SG_CHECK(count_notify(&out, SG_NK_F3) == 0);
+    o = obs(sg_at(D_FRI, 60), T, SG_CREATOR_ALLOWED);
+    SG_CHECK(sg_core_alarm_fired(&s, &o, SG_ALARM_RECHECK, &out) == SG_OK);
+    SG_CHECK(find(&out, SG_CMD_SCHEDULE, SG_ALARM_DEBOUNCE) == NULL);
+    SG_CHECK(count_notify(&out, SG_NK_F3) == 0);
+}
+
+/* K2: the F1 alarm fires for a T the user edited without a broadcast. The stale
+ * alarm must re-plan (F1 at the new T - lead), not be dropped silently. */
+static void test_core_stale_f1_replans(void) {
+    SgState s;
+    SgCmdList out;
+    const SgCmd *c;
+    SgObs o;
+    int64_t T1 = sg_at(D_FRI, 420);
+    int64_t T2 = sg_at(D_FRI, 440);        /* edited to 07:20, no broadcast */
+    sg_tz_set(TZ_BA);
+    sg_state_defaults(&s);
+    o = obs(sg_at(D_THU, 1260), T1, SG_CREATOR_ALLOWED);      /* 21:00 */
+    SG_CHECK(sg_core_sync(&s, &o, SG_REASON_BROADCAST, &out) == SG_OK);
+    SG_CHECK(find(&out, SG_CMD_SCHEDULE, SG_ALARM_F1) != NULL);
+    /* the old F1 alarm fires at 21:30 and reports T2 */
+    o = obs(sg_at(D_THU, 1290), T2, SG_CREATOR_ALLOWED);
+    SG_CHECK(sg_core_alarm_fired(&s, &o, SG_ALARM_F1, &out) == SG_OK);
+    SG_CHECK(out.dropped == 0);
+    SG_CHECK(count_notify(&out, SG_NK_F1) == 0);
+    c = find(&out, SG_CMD_SCHEDULE, SG_ALARM_F1);
+    SG_CHECK(c != NULL && c->a[1] == sg_at(D_THU, 1310) && c->a[2] == SG_SCHED_EXACT_IDLE);
+    SG_CHECK(s.last_seen_T == T2);
+    /* the re-planned F1 (21:50) posts the reminder */
+    o = obs(sg_at(D_THU, 1310), T2, SG_CREATOR_ALLOWED);
+    SG_CHECK(sg_core_alarm_fired(&s, &o, SG_ALARM_F1, &out) == SG_OK);
+    SG_CHECK(count_notify(&out, SG_NK_F1) == 1);
+}
+
+/* F1 + two snoozes = three F1 posts for one T, and no F3 (replacement for C3-3). */
+static void test_core_snooze_three_posts(void) {
+    SgState s;
+    SgCmdList out;
+    SgObs o;
+    int64_t T = sg_at(D_FRI, 420);
+    int64_t t = sg_at(D_THU, 1290);
+    int32_t posts = 0;
+    int i;
+    sg_tz_set(TZ_BA);
+    sg_state_defaults(&s);
+    o = obs(sg_at(D_THU, 1200), T, SG_CREATOR_ALLOWED);
+    SG_CHECK(sg_core_sync(&s, &o, SG_REASON_BROADCAST, &out) == SG_OK);
+    for (i = 0; i < 3; i++) {
+        o = obs(t, T, SG_CREATOR_ALLOWED);
+        SG_CHECK(sg_core_alarm_fired(&s, &o, SG_ALARM_F1, &out) == SG_OK);
+        posts += count_notify(&out, SG_NK_F1);
+        if (i < 2) {
+            o = obs(t + SG_MIN_TO_MS(1), T, SG_CREATOR_ALLOWED);
+            SG_CHECK(sg_core_action(&s, &o, SG_ACTION_SNOOZE, &out) == SG_OK);
+            t = t + SG_MIN_TO_MS(1 + SG_SNOOZE_MIN);
+        }
+    }
+    SG_CHECK(posts == 3);
+    SG_CHECK(s.snooze_count == 2);
+    SG_CHECK(s.last_f1_for_T == T);
+    SG_CHECK(count_notify(&out, SG_NK_F3) == 0);
+}
+
 #define CORE_RUN(fn)                                                         \
     do {                                                                     \
         sg_tz_set(TZ_BA);                                                    \
@@ -876,4 +1009,8 @@ void run_core_tests(void) {
     CORE_RUN(test_cmd_helpers_flatten);
     CORE_RUN(test_core_alarm_changed_resets);
     CORE_RUN(test_core_avail_min);
+    CORE_RUN(test_core_reboot_within_grace_f1_now);
+    CORE_RUN(test_core_reboot_late_one_f3);
+    CORE_RUN(test_core_stale_f1_replans);
+    CORE_RUN(test_core_snooze_three_posts);
 }

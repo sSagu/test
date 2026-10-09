@@ -237,10 +237,37 @@ static void test_ref_clear(void) {
     SG_CHECK(sg_ref_median(&s) == -1);
 }
 
+/* K5: an early alarm dismissal (T jumps a day) keeps last night's wake time and date. */
+static void test_log_early_dismiss_keeps_night(void) {
+    SgState s;
+    SgWeek w;
+    int k;
+    sg_tz_set(TZ_BA);
+    sg_state_defaults(&s);
+    /* Sun 22:40 bed, alarm Mon 07:00 */
+    (void)sg_log_bed_tap(&s, sg_at(20261011, 1360), sg_at(20261012, 420));
+    /* Mon 06:50 the user dismisses: T moves to Tue 07:00, 24 h after bed */
+    sg_log_follow_alarm(&s, sg_at(20261013, 420));
+    SG_CHECK(sg_log_at(&s, 0)->wake_ms == sg_at(20261012, 420));
+    /* Mon 22:40 tap: a new record, not an overwrite of Sunday's */
+    SG_CHECK(sg_log_bed_tap(&s, sg_at(20261012, 1360), sg_at(20261013, 420)) == 1);
+    sg_log_week(&s, 20261013, &w);
+    SG_CHECK(w.logged_count == 2);
+    for (k = 0; k < SG_DEBT_WINDOW_NIGHTS; k++) {
+        if (w.night[k].date == 20261012) {
+            SG_CHECK(w.night[k].status == 1 && w.night[k].est_sleep_min == 480);
+        }
+        if (w.night[k].date == 20261013) {
+            SG_CHECK(w.night[k].status == 1 && w.night[k].est_sleep_min == 480);
+        }
+    }
+}
+
 void run_sleeplog_tests(void) {
     SG_RUN(test_log_bed_tap_adds);
     SG_RUN(test_log_dedup_window);
     SG_RUN(test_log_follow_and_close);
+    SG_RUN(test_log_early_dismiss_keeps_night);
     SG_RUN(test_log_est_sleep);
     SG_RUN(test_log_ring_wrap_90);
     SG_RUN(test_log_week_attribution);

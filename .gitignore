@@ -3,3 +3,6 @@ keystore/
 *.apk
 *.idsig
 *.keystore
+
+# Prebuilt, signed APK for installing on the phone
+!dist/*.apk
