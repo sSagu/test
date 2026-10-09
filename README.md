@@ -146,5 +146,5 @@ Lo construyó un enjambre de modelos de IA coordinado por Claude: un asesor de a
 - **Las horas pueden atrasarse.** Si Android no permite alarmas exactas, el aviso puede llegar hasta 10 a 15 min tarde.
 - **Las alarmas con posponer** pueden hacer que la app tome la hora de la posposición. Es un caso que la app contempla, pero conviene verlo en la prueba.
 - **Hay que abrir la app después de un corte.** Si Android cierra la app a la fuerza, no corre nada hasta que la abras de nuevo.
-- **No está probada en un teléfono físico** por quienes la construyeron. Al momento de este README, el repo todavía no tenía los tests (`tests/` está vacío), así que `make test` y `make apk` pueden fallar hasta completarlo. **Probá la primera noche y revisá que el aviso llegue.**
+- **No está probada en un teléfono físico** (no había uno disponible al construirla). El núcleo en C sí está probado en la PC: tests unitarios con ASan/UBSan en 3 zonas horarias, valgrind sin leaks, clang-tidy y cppcheck limpios, y dos auditorías (Android y núcleo). **La primera noche, revisá que el aviso llegue.**
 - **Mide oportunidad, no sueño.** El número de "sueño" es una estimación (tiempo en cama menos 20 min). No es un dato médico.
