@@ -55,7 +55,7 @@ RES_FILES := $(shell find $(RES_DIR) -type f 2>/dev/null)
 
 # Device flags: exactly the S6 set from docs/ADVICE-architecture.md section 6.
 CFLAGS_DEV = -std=c11 -O2 -flto=thin -fPIC -fvisibility=hidden -ffunction-sections -fdata-sections \
-  -march=armv9.2-a -mtune=cortex-a720 -mbranch-protection=standard \
+  -march=armv9.2-a+nosve -mtune=cortex-a720 -mbranch-protection=standard \
   -fstack-protector-strong -fstack-clash-protection -ftrivial-auto-var-init=zero \
   -D_FORTIFY_SOURCE=3 -DNDEBUG -Wall -Wextra -Werror -Wformat=2 -Wconversion -Wshadow \
   -Wvla -Wimplicit-fallthrough -I$(INC_DIR)

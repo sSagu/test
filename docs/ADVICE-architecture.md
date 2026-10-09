@@ -132,7 +132,7 @@ Targets: `make apk` (default), `make test` (host, ASan+UBSan), `make asan` (alia
 Device .so (`build/lib/arm64-v8a/libsg.so`), sources `app/src/main/cpp/*.c`:
 ```
 CFLAGS_DEV = -std=c11 -O2 -flto=thin -fPIC -fvisibility=hidden -ffunction-sections -fdata-sections \
-  -march=armv9.2-a -mtune=cortex-a720 -mbranch-protection=standard \
+  -march=armv9.2-a+nosve -mtune=cortex-a720 -mbranch-protection=standard \
   -fstack-protector-strong -fstack-clash-protection -ftrivial-auto-var-init=zero \
   -D_FORTIFY_SOURCE=3 -DNDEBUG -Wall -Wextra -Werror -Wformat=2 -Wconversion -Wshadow \
   -Wvla -Wimplicit-fallthrough -Iapp/src/main/cpp/include
@@ -236,3 +236,4 @@ Accept: `make test` (ASan+UBSan, three TZs) and `make valgrind` exit 0; `grep -c
 - UI: Java Activity + XML. `NativeActivity` would need a GL/Canvas text stack for no benefit; JNI-driven framework views would triple the JNI surface.
 - No CFI (`-fsanitize=cfi`): the only indirect calls are ART→native, which CFI cannot check; PAC/BTI via `-mbranch-protection=standard` covers the device.
 - `-Wconversion` is on with `-Werror`; operators cast explicitly at every narrowing.
+- Orchestrator change (post-build): `-march=armv9.2-a+nosve`. With plain `armv9.2-a`, clang auto-vectorised parts of the core into SVE/SVE2 (199 instructions in libsg.so). Whether Samsung firmware exposes SVE to apps on the Exynos 2400 could not be verified; if it doesn't, any native call would die with SIGILL. The core is scalar time arithmetic, so SVE gains nothing: disabled, and `objdump --mattr=+sve2` shows 0 SVE instructions.
