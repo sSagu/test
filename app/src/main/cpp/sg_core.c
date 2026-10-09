@@ -494,7 +494,7 @@ static void fire_debounce(SgState *s, const SgObs *o, int rel, int64_t T, SgCmdL
     clear_debounce(s);
 }
 
-static void fire_f5_hint(SgState *s, const SgObs *o, int rel, int64_t T, SgCmdList *out)
+static void fire_f5_hint(SgState *s, int rel, int64_t T, SgCmdList *out)
 {
     Loc alarm;
     int32_t ref;
@@ -587,7 +587,7 @@ int sg_core_alarm_fired(SgState *s, const SgObs *o, int alarm_id, SgCmdList *out
         fire_debounce(s, o, rel, T, out);
         break;
     case SG_ALARM_F5_HINT:
-        fire_f5_hint(s, o, rel, T, out);
+        fire_f5_hint(s, rel, T, out);
         break;
     case SG_ALARM_F5_NOALARM:
         fire_f5_noalarm(s, o, rel, T, out);
