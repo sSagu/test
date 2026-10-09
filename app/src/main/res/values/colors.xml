@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="sg_black">#000000</color>
+    <color name="sg_text">#E6E6E6</color>
+    <color name="sg_text_dim">#9AA0A6</color>
+    <color name="sg_accent">#8AB4F8</color>
+    <color name="sg_surface">#101014</color>
+    <color name="sg_ic_launcher_background">#000000</color>
+</resources>

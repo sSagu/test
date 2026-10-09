@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.SG" parent="android:Theme.DeviceDefault.NoActionBar">
+        <item name="android:windowBackground">@color/sg_black</item>
+        <item name="android:colorBackground">@color/sg_black</item>
+        <item name="android:textColorPrimary">@color/sg_text</item>
+        <item name="android:colorAccent">@color/sg_accent</item>
+        <item name="android:statusBarColor">@color/sg_black</item>
+        <item name="android:navigationBarColor">@color/sg_black</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:enforceStatusBarContrast">false</item>
+        <item name="android:isLightTheme">false</item>
+    </style>
+
+    <style name="SgNightRow">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginTop">@dimen/sg_space_row</item>
+        <item name="android:textColor">@color/sg_text</item>
+        <item name="android:textSize">@dimen/sg_text_body</item>
+    </style>
+
+    <style name="SgSwitch">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">@dimen/sg_touch_min</item>
+        <item name="android:minHeight">@dimen/sg_touch_min</item>
+        <item name="android:layout_marginTop">@dimen/sg_space_row</item>
+        <item name="android:textColor">@color/sg_text</item>
+        <item name="android:textSize">@dimen/sg_text_body</item>
+    </style>
+
+    <style name="SgStepRow">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">@dimen/sg_touch_min</item>
+        <item name="android:layout_marginTop">@dimen/sg_space_row</item>
+        <item name="android:orientation">horizontal</item>
+        <item name="android:gravity">center_vertical</item>
+    </style>
+
+    <style name="SgStepButton">
+        <item name="android:layout_width">@dimen/sg_touch_min</item>
+        <item name="android:layout_height">@dimen/sg_touch_min</item>
+        <item name="android:minWidth">@dimen/sg_touch_min</item>
+        <item name="android:minHeight">@dimen/sg_touch_min</item>
+        <item name="android:padding">0dp</item>
+        <item name="android:textColor">@color/sg_accent</item>
+        <item name="android:textSize">@dimen/sg_text_title</item>
+    </style>
+</resources>

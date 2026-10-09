@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Sueño-Guía UI strings (es-AR). Verbatim copy of docs/ADVICE-features.md §5 (card J2). -->
+<resources>
+    <string name="str_app_name">Sueño-Guía</string>
+    <string name="str_ch_reminder_name">Recordatorio para dormir</string>
+    <string name="str_ch_reminder_desc">Te avisa con tiempo antes de tu alarma.</string>
+    <string name="str_ch_winddown_name">Preparación para dormir</string>
+    <string name="str_ch_winddown_desc">Un aviso suave antes del recordatorio principal.</string>
+    <string name="str_ch_late_name">Alarma cercana</string>
+    <string name="str_ch_late_desc">Te cuenta cuánto podés dormir si la alarma quedó cerca.</string>
+    <string name="str_ch_hints_name">Sugerencias</string>
+    <string name="str_ch_hints_desc">Consejos tranquilos, sin sonido.</string>
+    <string name="str_f1_title">Es hora de ir preparándote para dormir</string>
+    <string name="str_f1_body">Alarma a las %1$s. Para dormir %2$s, acostate a las %3$s.</string>
+    <string name="str_f1_body_late">Alarma a las %1$s. Si te acostás ahora, podés dormir %2$s.</string>
+    <string name="str_f1_action_sleep">Me voy a dormir</string>
+    <string name="str_f1_action_snooze">En 15 min</string>
+    <string name="str_f2_title">En un rato, a dormir</string>
+    <string name="str_f2_body">Bajá las luces y dejá las pantallas. Tu alarma suena a las %1$s.</string>
+    <string name="str_f3_title">Tu alarma quedó cerca</string>
+    <string name="str_f3_body">Alarma a las %1$s. Si te acostás ya, podés dormir unas %2$s.</string>
+    <string name="str_f3_body_ok">Alarma a las %1$s. Todavía llegás a dormir %2$s. Andá a la cama.</string>
+    <string name="str_f5_title_alarm">Sugerencia para el finde</string>
+    <string name="str_f5_body_alarm">Tu alarma es a las %1$s, %2$s más tarde que en la semana. Probá no pasar de las %3$s.</string>
+    <string name="str_f5_title_noalarm">Mañana sin alarma</string>
+    <string name="str_f5_body_noalarm">Levantarte antes de las %1$s te ayuda a no desfasar tu reloj.</string>
+    <string name="str_fmt_duration">%1$d h %2$02d min</string>
+    <string name="str_fmt_duration_min">%1$d min</string>
+    <string name="str_fmt_time">%1$02d:%2$02d</string>
+    <string name="str_fmt_date_short">%1$s %2$d/%3$d</string>
+    <string name="str_screen_title">Tu sueño</string>
+    <string name="str_screen_next_alarm">Próxima alarma: %1$s</string>
+    <string name="str_screen_next_alarm_none">No tenés alarma puesta</string>
+    <string name="str_screen_next_alarm_ignored">Hay una alarma de otra app (%1$s). No la tengo en cuenta.</string>
+    <string name="str_screen_next_reminder">Próximo recordatorio: %1$s</string>
+    <string name="str_screen_next_reminder_none">Sin recordatorio programado</string>
+    <string name="str_screen_last_nights">Últimas 7 noches</string>
+    <string name="str_screen_night_row">%1$s: te acostaste %2$s, alarma %3$s, ~%4$s de sueño</string>
+    <string name="str_screen_night_empty">sin registro</string>
+    <string name="str_screen_night_nowake">sin alarma, no se puede calcular</string>
+    <string name="str_screen_debt_title">Deuda de sueño de la semana</string>
+    <string name="str_screen_debt_value">%1$s (sobre %2$d noches registradas)</string>
+    <string name="str_screen_debt_zero">Sin deuda esta semana</string>
+    <string name="str_screen_debt_empty">Todavía no hay noches registradas. Tocá \"Me voy a dormir\" cuando te acuestes.</string>
+    <string name="str_screen_disclaimer">Esto mide el tiempo que tuviste para dormir, no el sueño real.</string>
+    <string name="str_screen_jetlag_ok">Tu horario del finde viene parecido al de la semana.</string>
+    <string name="str_screen_jetlag_nodata">Todavía no hay datos de tu horario de semana.</string>
+    <string name="str_settings_title">Ajustes</string>
+    <string name="str_settings_enabled">Activar recordatorios</string>
+    <string name="str_settings_lead">Avisarme antes de la alarma</string>
+    <string name="str_settings_lead_summary">%1$s antes (rango 8 h a 11 h)</string>
+    <string name="str_settings_target">Horas de sueño objetivo</string>
+    <string name="str_settings_winddown">Aviso previo de preparación</string>
+    <string name="str_settings_winddown_min">Anticipación del aviso previo</string>
+    <string name="str_settings_late">Avisar si la alarma quedó cerca</string>
+    <string name="str_settings_jetlag">Sugerencias para el finde</string>
+    <string name="str_settings_jetlag_noalarm">Sugerir hora de levantarme si no hay alarma</string>
+    <string name="str_settings_only_clock">Solo alarmas del Reloj</string>
+    <string name="str_settings_clear_log">Borrar registro de noches</string>
+    <string name="str_settings_clear_confirm">¿Borrar todo el registro? No se puede deshacer.</string>
+    <string name="str_btn_confirm">Borrar</string>
+    <string name="str_btn_cancel">Cancelar</string>
+    <string name="str_perm_notif_title">Permitir notificaciones</string>
+    <string name="str_perm_notif_body">Sin permiso no puedo avisarte antes de tu alarma. Todo se queda en tu teléfono.</string>
+    <string name="str_perm_notif_allow">Permitir</string>
+    <string name="str_perm_notif_later">Ahora no</string>
+    <string name="str_perm_notif_banner">Las notificaciones están desactivadas. No vas a recibir avisos.</string>
+    <string name="str_perm_notif_open_settings">Abrir ajustes</string>
+    <string name="str_error_generic">Algo salió mal. Probá abrir la app de nuevo.</string>
+    <string name="str_error_alarm_read">No pude leer tu próxima alarma.</string>
+    <string-array name="str_wday_short">
+        <item>dom</item>
+        <item>lun</item>
+        <item>mar</item>
+        <item>mié</item>
+        <item>jue</item>
+        <item>vie</item>
+        <item>sáb</item>
+    </string-array>
+</resources>

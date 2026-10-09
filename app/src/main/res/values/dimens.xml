@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <dimen name="sg_gutter">16dp</dimen>
+    <dimen name="sg_touch_min">48dp</dimen>
+    <dimen name="sg_space_section">24dp</dimen>
+    <dimen name="sg_space_row">12dp</dimen>
+    <dimen name="sg_text_body">16sp</dimen>
+    <dimen name="sg_text_title">18sp</dimen>
+    <dimen name="sg_text_big">20sp</dimen>
+    <dimen name="sg_text_small">14sp</dimen>
+</resources>
