@@ -183,8 +183,14 @@ static jint jni_init(JNIEnv *env, jclass cls, jstring path)
         memcpy(g_path, local, len + 1);
         code = sg_store_load(g_path, &g_state);
         g_ready = 1;
-        g_loaded = 1;
-        g_init_code = code;
+        if (code == SG_STORE_E_IO) {
+            /* File may exist but could not be read: defaults in memory, persistence
+             * off, retry on the next nativeInit. Never overwrite the user's file. */
+            g_loaded = 0;
+        } else {
+            g_loaded = 1;
+            g_init_code = code;
+        }
     }
     mu_unlock();
     return (jint)code;

@@ -46,12 +46,14 @@ public final class MainActivity extends android.app.Activity {
         super.onCreate(savedInstanceState);
         getWindow().setDecorFitsSystemWindows(false);   // edge-to-edge
         setContentView(R.layout.activity_main);
+        Sg.init(this);
         bindViews();
         root.setOnApplyWindowInsetsListener(new View.OnApplyWindowInsetsListener() {
             @Override
             public WindowInsets onApplyWindowInsets(View v, WindowInsets ins) {
-                android.graphics.Insets i = ins.getInsets(WindowInsets.Type.systemBars());
-                v.setPadding(0, i.top, 0, i.bottom);
+                android.graphics.Insets i = ins.getInsets(
+                        WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout());
+                v.setPadding(i.left, i.top, i.right, i.bottom);
                 return ins;
             }
         });
@@ -103,6 +105,9 @@ public final class MainActivity extends android.app.Activity {
         swJetlag = findViewById(R.id.sw_jetlag);
         swJetlagNoalarm = findViewById(R.id.sw_jetlag_noalarm);
         swOnlyClock = findViewById(R.id.sw_only_clock);
+        for (Switch sw : new Switch[]{swEnabled, swWinddown, swLate, swJetlag, swJetlagNoalarm, swOnlyClock}) {
+            sw.setSaveEnabled(false);   // no restore-time onCheckedChanged before nativeInit
+        }
         btnLeadMinus = findViewById(R.id.btn_lead_minus);
         btnLeadPlus = findViewById(R.id.btn_lead_plus);
         btnTargetMinus = findViewById(R.id.btn_target_minus);

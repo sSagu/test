@@ -74,7 +74,12 @@ public final class Sg {
         }
         NotificationManager nm = ctx.getSystemService(NotificationManager.class);
         int exact = am.canScheduleExactAlarms() ? 1 : 0;
-        int notif = nm.areNotificationsEnabled() ? 1 : 0;
+        boolean on = nm.areNotificationsEnabled();
+        NotificationChannel ch = nm.getNotificationChannel(CH_REMINDER);
+        if (ch != null && ch.getImportance() == NotificationManager.IMPORTANCE_NONE) {
+            on = false;
+        }
+        int notif = on ? 1 : 0;
         return new Observation(now, next, creator, exact, notif);
     }
 

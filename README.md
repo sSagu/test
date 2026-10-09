@@ -57,12 +57,12 @@ adb install -r build/sg.apk
 
 ## Ajustes de Samsung para que no te la duerma
 
-Android y One UI pueden frenar la app en segundo plano y perderse el recordatorio. Hacé estos dos pasos (**recomendado**):
+Android y One UI pueden frenar la app en segundo plano y perderse el recordatorio. Hacé estos pasos una vez después de instalar, y de nuevo si los recordatorios dejan de llegar:
 
-1. **Batería sin límites para la app** (**recomendado**):
-   Ajustes → Aplicaciones → Sueño-Guía → Batería → **Sin restricciones**.
-2. **Que nunca se suspenda** (**recomendado**):
-   Ajustes → Batería → Límites de uso en segundo plano → **Aplicaciones que nunca se suspenden** → agregá **Sueño-Guía**.
+1. Ajustes → Batería → Límites de uso en segundo plano → **Aplicaciones que nunca se suspenden** → agregá **Sueño-Guía**.
+2. Ajustes → Aplicaciones → Sueño-Guía → Batería → **Sin restricciones**.
+3. En la pantalla de la app, desactivá **Pausar actividad de la app si no se usa**.
+4. Opcional: en Ajustes → Batería → Límites de uso en segundo plano, desactivá **Poner en suspensión las aplicaciones sin uso**.
 
 **Modo Dormir / No molestar:** la notificación igual llega y queda visible en el panel, pero sin sonido ni vibración. Si querés que suene durante el modo, agregá la app como excepción en la configuración de ese modo (Ajustes → Modos y rutinas → el modo → Notificaciones → apps permitidas).
 
