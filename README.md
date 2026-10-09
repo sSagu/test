@@ -70,16 +70,45 @@ Android y One UI pueden frenar la app en segundo plano y perderse el recordatori
 
 ## Cómo probar que anda
 
-Hacé estas pruebas antes de confiar en la app. Tené en cuenta que la app **ignora alarmas fuera de la franja 04:00 a 12:00** (hora local) y alarmas de otras apps (si tenés "Solo alarmas del Reloj" activado).
+**Antes de empezar (una sola vez):**
+1. Abrí Sueño-Guía apenas la instalás y tocá **Permitir** (y aceptá el diálogo de Android). Hasta que la abras una vez, Android no le avisa nada. Si ves "Las notificaciones están desactivadas. No vas a recibir avisos.", tocá **Abrir ajustes** y activalas.
+2. Ajustes de Android → Aplicaciones → Sueño-Guía → Batería → **Sin restricciones**. Fijate también que no esté en las listas de aplicaciones en suspensión.
 
-1. **Lectura:** poné una alarma en el Reloj para dentro de 6 h (dentro de 04:00 a 12:00). Abrí Sueño-Guía. "Próxima alarma" debe mostrar esa hora.
-2. **Aviso de alarma cercana (F3):** con esa misma alarma, esperá unos **90 s**. Debe llegar "Tu alarma quedó cerca" con las horas posibles de sueño. Si ya te llegó uno en las últimas 3 h, no va a aparecer otro (es el cooldown, es normal).
-3. **Recordatorio principal (F1):** cambiá la alarma para dentro de **9 h 35 min**. En unos **5 min** debe llegar "Es hora de ir preparándote para dormir" con la hora para acostarte.
-4. **Registro de noche (F4):** en esa notificación, tocá **"Me voy a dormir"**. Abrí la app: debe aparecer una noche nueva con tu hora de acostarte y la alarma.
-5. **Posponer:** en la misma notificación probá **"En 15 min"**; debe volver a aparecer en 15 min (hasta 2 veces).
-6. **Cancelar:** borrá la alarma en el Reloj y abrí la app. Debe decir "No tenés alarma puesta" y no quedar ningún recordatorio programado.
+**Reglas que tenés que saber:**
+- La app mira solo la **próxima** alarma del Reloj. La usa si suena entre **04:00 y 12:00** (ambas incluidas) y faltan **36 h o menos**.
+- Una alarma fuera de esa franja aparece igual como "Próxima alarma: HH:MM", pero con "Sin recordatorio programado". Revisá que sea a. m. (04:00 y no 16:00).
+- El aviso sale a la hora de la alarma menos "Avisarme antes de la alarma" (9 h 30 min de fábrica, se cambia con − y + de 8 h a 11 h). La pantalla muestra solo la hora, sin el día.
+- Si dice "Hay una alarma de otra app (HH:MM). No la tengo en cuenta.", desactivá "Solo alarmas del Reloj".
 
-Después de borrar las pruebas, limpiá el registro desde Ajustes → "Borrar registro de noches".
+**Comprobación instantánea (a cualquier hora):** poné tu alarma real y abrí la app. Ejemplo: alarma a las 08:00 → "Próxima alarma: 08:00" y "Próximo recordatorio: 22:30".
+
+**Prueba real del aviso.** Elegí la fila según la hora actual. Ponés la alarma de prueba en el Reloj y después volvés a la app:
+
+| Hora actual | Anticipación | Alarma de prueba | El aviso llega |
+|---|---|---|---|
+| 04:00 a 16:55 | 11 h (6 toques en +) | 04:00 del día siguiente | a las 17:00 |
+| 16:55 a 18:25 | 11 h (6 toques en +) | ahora + 11 h 05 min | en unos 5 min |
+| 18:25 a 02:25 | 9 h 30 (no toques nada) | ahora + 9 h 35 min | en unos 5 min |
+| 02:25 a 03:55 | 8 h (6 toques en −) | ahora + 8 h 05 min | en unos 5 min |
+
+(Entre las 03:55 y las 04:00 esperá unos minutos y usá la primera fila.)
+
+- "Próximo recordatorio:" tiene que mostrar la hora de la última columna. Si tardás hasta 30 min en poner la alarma, el aviso sale enseguida.
+- Llega "Es hora de ir preparándote para dormir" con "Alarma a las HH:MM. Para dormir 8 h 00 min, acostate a las (alarma − 8 h 20 min)." Con anticipación de 8 h el texto es "Alarma a las HH:MM. Si te acostás ahora, podés dormir 7 h 30 min.".
+- Tocá los botones, **no el cuerpo** del aviso: tocar el cuerpo abre la app y borra el aviso con sus botones.
+  1. **En 15 min:** el aviso desaparece y vuelve 15 min después del toque. Funciona 2 veces; a la segunda vuelta ya no está el botón.
+  2. **Me voy a dormir:** cierra el aviso y anota la noche bajo el día de la alarma. Si tocás antes de las 00:00, la noche aparece recién después de medianoche.
+- (Opcional) Aviso de alarma cercana: con la anticipación de fábrica, poné una alarma que suene dentro de 4 h 22 min a 9 h (siempre entre 04:00 y 12:00). Unos 90 s después llega "Tu alarma quedó cerca". No aparece si hubo otro aviso en las últimas 3 h.
+
+**Limpieza (siempre):**
+1. Volvé la anticipación a "9 h 30 min antes (rango 8 h a 11 h)".
+2. Borrá la alarma de prueba en el Reloj. Si queda, suena de verdad y tapa tu alarma real.
+3. Ajustes → "Borrar registro de noches" → **Borrar**.
+4. Abrí la app: con tu alarma real tiene que decir "Próximo recordatorio: (alarma − 9 h 30)". Si la alarma está a más de 36 h (por ejemplo, el lunes visto desde el viernes), dice "Sin recordatorio programado" hasta que falten 36 h. Es normal.
+
+**Esto no es una falla:**
+- Después de que salió el aviso, la app dice "Sin recordatorio programado".
+- Con No molestar o con el modo Dormir de Samsung activo, el aviso llega sin sonido. Agregá Sueño-Guía como excepción del modo o mirá el panel de notificaciones.
 
 ---
 
@@ -146,5 +175,6 @@ Lo construyó un enjambre de modelos de IA coordinado por Claude: un asesor de a
 - **Las horas pueden atrasarse.** Si Android no permite alarmas exactas, el aviso puede llegar hasta 10 a 15 min tarde.
 - **Las alarmas con posponer** pueden hacer que la app tome la hora de la posposición. Es un caso que la app contempla, pero conviene verlo en la prueba.
 - **Hay que abrir la app después de un corte.** Si Android cierra la app a la fuerza, no corre nada hasta que la abras de nuevo.
+- **Si reiniciás el teléfono después de que llegó el aviso y antes de tocar "Me voy a dormir", el aviso no vuelve** y esa noche no queda registrada (Android borra las notificaciones al reiniciar). El aviso de la noche siguiente funciona normal.
 - **No está probada en un teléfono físico** (no había uno disponible al construirla). El núcleo en C sí está probado en la PC: tests unitarios con ASan/UBSan en 3 zonas horarias, valgrind sin leaks, clang-tidy y cppcheck limpios, y dos auditorías (Android y núcleo). **La primera noche, revisá que el aviso llegue.**
 - **Mide oportunidad, no sueño.** El número de "sueño" es una estimación (tiempo en cama menos 20 min). No es un dato médico.
