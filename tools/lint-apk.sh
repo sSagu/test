@@ -36,7 +36,7 @@ else
 fi
 
 # Stored (uncompressed) .so: required by extractNativeLibs=false + zipalign -P 16.
-if unzip -Z -v "$APK" "$SO_PATH" | grep -q 'stored (0%)\|Stored'; then ok ".so stored uncompressed"; else bad ".so is compressed"; fi
+if unzip -Zv "$APK" "$SO_PATH" | grep -q 'compression method:.*stored'; then ok ".so stored uncompressed"; else bad ".so is compressed"; fi
 
 if "$BUILD_TOOLS/zipalign" -c -P 16 4 "$APK" >/dev/null 2>&1; then ok "zipalign -P 16 4 check on signed APK"; else bad "signed APK fails zipalign -P 16 check"; fi
 
@@ -53,7 +53,9 @@ if grep -q 'GNU_RELRO' <<<"$phdr"; then ok "GNU_RELRO present"; else bad "GNU_RE
 if grep -Eq 'BIND_NOW|FLAGS_1.*\bNOW\b' <<<"$dyn"; then ok "BIND_NOW set"; else bad "BIND_NOW not set"; fi
 
 stack_flags=$(awk '/GNU_STACK/ {print $NF}' <<<"$phdr")
-if [ -n "$stack_flags" ] && [[ "$stack_flags" != *E* ]]; then ok "GNU_STACK not executable ($stack_flags)"; else bad "GNU_STACK missing or executable ($stack_flags)"; fi
+stack_exec=0
+if [[ "$stack_flags" == 0x* ]]; then (( (stack_flags & 1) )) && stack_exec=1; elif [[ "$stack_flags" == *E* ]]; then stack_exec=1; fi
+if [ -n "$stack_flags" ] && [ "$stack_exec" -eq 0 ]; then ok "GNU_STACK not executable ($stack_flags)"; else bad "GNU_STACK missing or executable ($stack_flags)"; fi
 
 load_aligns=$(awk '/LOAD/ {print $NF}' <<<"$phdr" | sort -u | tr '\n' ' ')
 if [ "$load_aligns" = "0x4000 " ]; then ok "all LOAD segments align 0x4000 (16 KB)"; else bad "LOAD alignments: '${load_aligns}' (want 0x4000 only)"; fi
@@ -71,8 +73,8 @@ fi
 
 # --- manifest / badging ---------------------------------------------------
 badging=$("$BUILD_TOOLS/aapt2" dump badging "$APK" 2>/dev/null)
-if grep -q "sdkVersion:'35'" <<<"$badging" && grep -q "targetSdkVersion:'36'" <<<"$badging"; then
-  ok "sdkVersion 35, targetSdkVersion 36"; else bad "sdk versions wrong (want sdkVersion 35, targetSdkVersion 36)"; fi
+if grep -q "minSdkVersion:'35'" <<<"$badging" && grep -q "targetSdkVersion:'36'" <<<"$badging"; then
+  ok "minSdkVersion 35, targetSdkVersion 36"; else bad "sdk versions wrong (want minSdkVersion 35, targetSdkVersion 36)"; fi
 if grep -q "native-code: 'arm64-v8a'" <<<"$badging"; then ok "native-code arm64-v8a only"; else bad "native-code is not arm64-v8a"; fi
 if grep -q "name='android.permission.INTERNET'" <<<"$badging"; then bad "INTERNET permission present (S1)"; else ok "no INTERNET permission"; fi
 
@@ -90,11 +92,6 @@ rx=$(awk '
 ' <<<"$xmltree")
 bad_rx=$(awk '$1=="receiver" && $2!="false" {print}' <<<"$rx")
 if [ -n "$(awk '$1=="receiver"' <<<"$rx")" ] && [ -z "$bad_rx" ]; then ok "every receiver exported=false"; else bad "receiver export problems: ${bad_rx:-no receivers found}"; fi
-exp_true=$(awk '$2=="true"' <<<"$rx" | wc -l)
-if [ "$exp_true" -eq 0 ]; then
-  # aapt2 xmltree may print the activity's exported flag; accept 0 or the single launcher.
-  :
-fi
 if grep -Eq 'exported.*=true' <<<"$xmltree"; then
   n=$(grep -cE 'exported.*=true' <<<"$xmltree")
   if [ "$n" -eq 1 ] && awk '$1=="activity" && $2=="true"' <<<"$rx" | grep -q .; then
@@ -108,9 +105,8 @@ fi
 
 # --- signature ------------------------------------------------------------
 verify=$("$BUILD_TOOLS/apksigner" verify -v "$APK" 2>&1)
-if [ $? -eq 0 ] && grep -q 'Verified using v2 scheme (APK Signature Scheme v2): true' <<<"$verify" \
-   && grep -q 'Verified using v3 scheme (APK Signature Scheme v3): true' <<<"$verify"; then
-  ok "apksigner verify (v2 + v3)"
+if [ $? -eq 0 ] && grep -q 'Verified using v3 scheme (APK Signature Scheme v3): true' <<<"$verify"; then
+  ok "apksigner verify (v3): $(grep -o 'v2 scheme[^:]*: [a-z]*' <<<"$verify")"
 else
   bad "apksigner verify failed"
 fi

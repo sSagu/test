@@ -18,7 +18,6 @@ endif
 
 # Host compiler for tests and lint. gcc has working ASan/UBSan runtimes here; the NDK clang is device-only.
 HOST_CC ?= gcc
-HOST_TIDY_CC ?= clang
 TEST_TZS ?= America/Argentina/Buenos_Aires Europe/Madrid UTC
 
 BUILD    := build
