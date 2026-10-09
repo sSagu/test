@@ -78,6 +78,11 @@ void sg_log_follow_alarm(SgState *s, int64_t T_ms)
     if (newest < 0 || s->nights[newest].closed != 0) {
         return;
     }
+    /* A T more than SG_MAX_OPPORTUNITY_MIN after bed belongs to a later night (alarm
+     * dismissed before it rang): keep this night's wake time. */
+    if (T_ms > 0 && T_ms - s->nights[newest].bed_ms > SG_MIN_TO_MS(SG_MAX_OPPORTUNITY_MIN)) {
+        return;
+    }
     s->nights[newest].wake_ms = (T_ms < 0) ? 0 : T_ms;
 }
 
@@ -92,7 +97,9 @@ int sg_log_close_if_due(SgState *s, int64_t now_ms)
     }
     for (i = 0; i < (int)s->night_count; i++) {
         n = &s->nights[idx_of(i, s->night_head)];
-        if (n->closed == 0 && n->wake_ms > 0 && now_ms >= n->wake_ms) {
+        if (n->closed == 0 &&
+            ((n->wake_ms > 0 && now_ms >= n->wake_ms) ||
+             (n->wake_ms == 0 && now_ms - n->bed_ms > SG_MIN_TO_MS(SG_MAX_OPPORTUNITY_MIN)))) {
             n->closed = 1;
             closed = 1;
         }

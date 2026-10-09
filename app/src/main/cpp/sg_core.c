@@ -168,7 +168,7 @@ static void start_debounce(SgState *s, int64_t now, int64_t T, SgCmdList *out)
 
     s->debounce_due_ms = due;
     s->debounce_T = T;
-    sg_cmd_schedule(out, SG_ALARM_DEBOUNCE, due, SG_SCHED_EXACT);
+    sg_cmd_schedule(out, SG_ALARM_DEBOUNCE, due, SG_SCHED_EXACT_IDLE);
 }
 
 static void clear_debounce(SgState *s)
@@ -337,6 +337,7 @@ int sg_core_sync(SgState *s, const SgObs *o, int reason, SgCmdList *out)
                 sg_cmd_cancel_notify(out, SG_NK_F1);
             }
             sg_cmd_cancel_notify(out, SG_NK_F2);
+            sg_cmd_cancel_notify(out, SG_NK_F3);
             sg_cmd_cancel_alarm(out, SG_ALARM_F1);
             sg_cmd_cancel_alarm(out, SG_ALARM_F2);
             sg_cmd_cancel_alarm(out, SG_ALARM_F5_HINT);
@@ -359,18 +360,21 @@ int sg_core_sync(SgState *s, const SgObs *o, int reason, SgCmdList *out)
                 start_debounce(s, now, T, out);
             }
         } else {
-            /* T unchanged: idempotent re-plan of F1/F2. */
-            if (now < f1 && s->last_f1_for_T != T) {
-                sg_cmd_schedule(out, SG_ALARM_F1, f1, SG_SCHED_EXACT_IDLE);
+            /* T unchanged: idempotent re-plan of F1/F2. Also recovers an F1 alarm that
+             * was lost (reboot, force-stop, update) or moved into the past (lead change):
+             * within grace -> F1 now; later -> one F3 evaluation (fire_debounce then marks
+             * T handled, so RECHECK cannot repeat it). */
+            if (s->last_f1_for_T != T) {
+                if (now < f1) {
+                    sg_cmd_schedule(out, SG_ALARM_F1, f1, SG_SCHED_EXACT_IDLE);
+                } else if (now <= f1 + min_ms(SG_F1_GRACE_MIN)) {
+                    sg_cmd_schedule(out, SG_ALARM_F1, now, SG_SCHED_EXACT_IDLE);
+                } else if (has_flag(s, SG_FLAG_LATE_ON) &&
+                           (s->debounce_due_ms == 0 || s->debounce_T == T)) {
+                    start_debounce(s, now, T, out);
+                }
             }
             sched_f2_or_cancel(s, f1, now, T, out);
-
-            /* A late change is still waiting for its debounce: push it out again. */
-            if (s->last_f1_for_T != T && now > f1 + min_ms(SG_F1_GRACE_MIN) &&
-                has_flag(s, SG_FLAG_LATE_ON) && s->debounce_due_ms != 0 &&
-                s->debounce_T == T) {
-                start_debounce(s, now, T, out);
-            }
         }
     } else {
         /* No relevant alarm: cancel F1/F2/F5 hint and their notifications. */
@@ -382,8 +386,16 @@ int sg_core_sync(SgState *s, const SgObs *o, int reason, SgCmdList *out)
             sg_cmd_cancel_notify(out, SG_NK_F1);
         }
         sg_cmd_cancel_notify(out, SG_NK_F2);
+        sg_cmd_cancel_notify(out, SG_NK_F3);
+        sg_cmd_cancel_notify(out, SG_NK_F5);
         put_flag(s, SG_FLAG_F1_POSTED, 0);
-        sg_cmd_cancel_alarm(out, SG_ALARM_F1);
+        if (rel == SG_REL_HORIZON) {
+            /* Beyond 36 h: keep an exact wake-up at its F1 time so a starved RECHECK
+             * cannot lose the reminder; alarm_fired(F1) then re-plans through sync. */
+            sg_cmd_schedule(out, SG_ALARM_F1, f1_of(s, T), SG_SCHED_EXACT_IDLE);
+        } else {
+            sg_cmd_cancel_alarm(out, SG_ALARM_F1);
+        }
         sg_cmd_cancel_alarm(out, SG_ALARM_F2);
         sg_cmd_cancel_alarm(out, SG_ALARM_F5_HINT);
         clear_debounce(s);
@@ -403,10 +415,17 @@ static void fire_f1(SgState *s, const SgObs *o, int rel, int64_t T, SgCmdList *o
     int actions;
     int64_t bed_ms;
     Loc bed;
+    int first;
 
-    if (rel != SG_REL_OK || T != s->last_seen_T || s->last_f1_for_T == T) {
+    if (rel != SG_REL_OK || T != s->last_seen_T) {
         return;
     }
+    /* Once per T; only a snoozed F1 (snooze_count > 0, notification withdrawn) re-posts. */
+    if (s->last_f1_for_T == T &&
+        (s->snooze_count == 0 || has_flag(s, SG_FLAG_F1_POSTED))) {
+        return;
+    }
+    first = (s->last_f1_for_T != T);
 
     actions = SG_ACT_SLEEP;
     if (s->snooze_count < SG_SNOOZE_MAX) {
@@ -428,7 +447,9 @@ static void fire_f1(SgState *s, const SgObs *o, int rel, int64_t T, SgCmdList *o
     put_flag(s, SG_FLAG_F1_POSTED, 1);
     sg_cmd_cancel_notify(out, SG_NK_F2);
 
-    sample_if_weekday(s, T);
+    if (first) {
+        sample_if_weekday(s, T);
+    }
 
     {
         int32_t delta = 0;
@@ -490,6 +511,9 @@ static void fire_debounce(SgState *s, const SgObs *o, int rel, int64_t T, SgCmdL
         sg_cmd_notify(out, SG_NK_F3, avail >= target ? SG_TXT_F3_OK : SG_TXT_F3_LATE,
                       alarm.mod, avail, 0, SG_ACT_SLEEP, SG_F3_TIMEOUT_MIN);
         s->last_notified_ms = now;
+    }
+    if (now > f1 + min_ms(SG_F1_GRACE_MIN)) {
+        s->last_f1_for_T = T;   /* F1 time is over for this T: evaluate F3 once only */
     }
     clear_debounce(s);
 }
@@ -576,6 +600,13 @@ int sg_core_alarm_fired(SgState *s, const SgObs *o, int alarm_id, SgCmdList *out
     rel = sg_core_relevant(s, o);
     T = o->next_alarm_ms;
 
+    /* The alarm clock changed and no broadcast reached us: re-plan now instead of
+     * silently dropping the reminder. */
+    if ((alarm_id == SG_ALARM_F1 || alarm_id == SG_ALARM_F2 || alarm_id == SG_ALARM_F5_HINT) &&
+        (rel == SG_REL_OK ? T != s->last_seen_T : s->last_seen_T != 0)) {
+        return sg_core_sync(s, o, SG_REASON_RECHECK, out);
+    }
+
     switch (alarm_id) {
     case SG_ALARM_F1:
         fire_f1(s, o, rel, T, out);
@@ -645,12 +676,11 @@ int sg_core_action(SgState *s, const SgObs *o, int action_id, SgCmdList *out)
         sg_cmd_cancel_notify(out, SG_NK_F3);
         put_flag(s, SG_FLAG_F1_POSTED, 0);
     } else {
-        if (s->snooze_count < SG_SNOOZE_MAX) {
+        if (s->snooze_count < SG_SNOOZE_MAX && has_flag(s, SG_FLAG_F1_POSTED)) {
             s->snooze_count = (uint8_t)(s->snooze_count + 1u);
             sg_cmd_cancel_notify(out, SG_NK_F1);
             put_flag(s, SG_FLAG_F1_POSTED, 0);
-            /* Allow the snoozed F1 to post again for the same T. */
-            s->last_f1_for_T = 0;
+            /* last_f1_for_T stays T: fire_f1 lets a snoozed F1 re-post. */
             sg_cmd_schedule(out, SG_ALARM_F1, now + min_ms(SG_SNOOZE_MIN),
                             SG_SCHED_EXACT_IDLE);
         }
