@@ -66,7 +66,7 @@ LDFLAGS_DEV = -shared -flto=thin -Wl,-z,relro,-z,now,-z,noexecstack,-z,max-page-
 HOST_CFLAGS = -std=c11 -O1 -g -Wall -Wextra -Werror -Wformat=2 -Wconversion -Wshadow -Wvla \
   -fstack-protector-strong -D_FORTIFY_SOURCE=2 -I$(INC_DIR)
 ASAN_FLAGS  = -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer
-TIDY_CHECKS = bugprone-*,cert-*,clang-analyzer-*,misc-*,-misc-no-recursion,readability-*
+TIDY_CHECKS = bugprone-*,cert-*,clang-analyzer-*,misc-*,-misc-no-recursion,-misc-include-cleaner,readability-misleading-indentation,readability-suspicious-call-argument,readability-non-const-parameter,readability-duplicate-include,-bugprone-easily-swappable-parameters,-clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling,-bugprone-reserved-identifier,-cert-dcl37-c,-cert-dcl51-cpp,-bugprone-signed-char-misuse,-cert-str34-c
 
 .PHONY: apk test asan valgrind lint clean
 

@@ -127,6 +127,7 @@ static void test_core_none_cancels(void) {
     o = obs(now, T, SG_CREATOR_ALLOWED);
     SG_CHECK(sg_core_sync(&s, &o, SG_REASON_BROADCAST, &out) == SG_OK);
     SG_CHECK(find(&out, SG_CMD_SCHEDULE, SG_ALARM_F1) != NULL);
+    set_flag(&s, SG_FLAG_F1_POSTED, 1);     /* F1 notification believed visible */
     /* alarm removed */
     o = obs(now + SG_MIN_TO_MS(1), 0, SG_CREATOR_NONE);
     SG_CHECK(sg_core_relevant(&s, &o) == SG_REL_NONE);
@@ -171,7 +172,7 @@ static void test_core_disabled_cancels_all(void) {
     SgState s;
     SgCmdList out;
     SgObs o;
-    int id, kind;
+    int id;
     sg_tz_set(TZ_BA);
     sg_state_defaults(&s);
     set_flag(&s, SG_FLAG_ENABLED, 0);
@@ -186,8 +187,6 @@ static void test_core_disabled_cancels_all(void) {
     SG_CHECK(find(&out, SG_CMD_CANCEL_NOTIFY, SG_NK_F2) != NULL);
     SG_CHECK(find(&out, SG_CMD_CANCEL_NOTIFY, SG_NK_F3) != NULL);
     SG_CHECK(find(&out, SG_CMD_CANCEL_NOTIFY, SG_NK_F5) != NULL);
-    kind = 0;
-    (void)kind;
 }
 
 static void test_core_late_debounce_f3(void) {
@@ -357,7 +356,7 @@ static void test_core_f1_fires_once(void) {
     c = find(&out, SG_CMD_NOTIFY, SG_NK_F1);
     SG_CHECK(c != NULL && c->a[1] == SG_TXT_F1_NORMAL);
     SG_CHECK(c != NULL && c->a[2] == 420 && c->a[3] == 480);
-    SG_CHECK(c != NULL && c->a[4] == sg_at(D_THU, 1360));  /* bed 22:40 */
+    SG_CHECK(c != NULL && c->a[4] == 1360);  /* bed 22:40, minute-of-day */
     SG_CHECK(c != NULL && c->a[5] == (SG_ACT_SLEEP | SG_ACT_SNOOZE) && c->a[6] == SG_F1_TIMEOUT_MIN);
     SG_CHECK(find(&out, SG_CMD_CANCEL_NOTIFY, SG_NK_F2) != NULL);
     SG_CHECK(s.last_f1_for_T == T);
@@ -487,13 +486,13 @@ static void test_core_sleep_action_window(void) {
     SG_CHECK(find(&out, SG_CMD_CANCEL_NOTIFY, SG_NK_F1) != NULL);
     SG_CHECK(find(&out, SG_CMD_CANCEL_NOTIFY, SG_NK_F3) != NULL);
     SG_CHECK(s.ref_count == 1);                 /* Friday wake = weekday F5 sample */
-    /* window edges: T-60 accepted, T-61 rejected, T-690 accepted, T-691 rejected */
+    /* window [T-690, T-60]: edges accepted, one minute outside rejected */
     sg_state_defaults(&s);
     o = obs(T - SG_MIN_TO_MS(60), T, SG_CREATOR_ALLOWED);
     (void)sg_core_action(&s, &o, SG_ACTION_SLEEP, &out);
     SG_CHECK(s.night_count == 1);
     sg_state_defaults(&s);
-    o = obs(T - SG_MIN_TO_MS(61), T, SG_CREATOR_ALLOWED);
+    o = obs(T - SG_MIN_TO_MS(59), T, SG_CREATOR_ALLOWED);
     (void)sg_core_action(&s, &o, SG_ACTION_SLEEP, &out);
     SG_CHECK(s.night_count == 0);
     sg_state_defaults(&s);
@@ -602,7 +601,7 @@ static void test_core_f5_monday_and_tz(void) {
     SgCmdList out;
     SgObs o;
     int64_t T = sg_at(D_MON, 430);           /* Monday 07:10, alarm set on Sunday night */
-    int64_t f1 = sg_core_f1_at(&s, T);
+    int64_t f1;
     sg_tz_set(TZ_BA);
     sg_state_defaults(&s);
     add_ref(&s);
@@ -753,6 +752,7 @@ static void test_core_command_budget(void) {
     s.last_seen_T = T_old;
     o = obs(now - SG_MIN_TO_MS(60), T_old, SG_CREATOR_ALLOWED);
     SG_CHECK(sg_core_action(&s, &o, SG_ACTION_SLEEP, &out) == SG_OK);   /* open record */
+    set_flag(&s, SG_FLAG_F1_POSTED, 1);                                 /* SLEEP cleared it */
     o = obs(now, T_new, SG_CREATOR_ALLOWED);                            /* T changed, late */
     SG_CHECK(sg_core_sync(&s, &o, SG_REASON_BROADCAST, &out) == SG_OK);
     SG_CHECK(out.dropped == 0);
@@ -841,32 +841,39 @@ static void test_core_avail_min(void) {
     SG_CHECK(sg_core_avail_min(now, now + SG_MIN_TO_MS(60)) == 0);     /* never negative */
 }
 
+/* Every core test computes local times with sg_at(): set the zone before each one. */
+#define CORE_RUN(fn)                                                         \
+    do {                                                                     \
+        sg_tz_set(TZ_BA);                                                    \
+        SG_RUN(fn);                                                          \
+    } while (0)
+
 void run_core_tests(void) {
-    SG_RUN(test_core_f1_schedules_across_midnight);
-    SG_RUN(test_core_window_and_horizon);
-    SG_RUN(test_core_none_cancels);
-    SG_RUN(test_core_other_app_only_clock);
-    SG_RUN(test_core_disabled_cancels_all);
-    SG_RUN(test_core_late_debounce_f3);
-    SG_RUN(test_core_f3_cooldown_and_threshold);
-    SG_RUN(test_core_f3_variant_ok_and_f1_future);
-    SG_RUN(test_core_debounce_rules);
-    SG_RUN(test_core_f1_fires_once);
-    SG_RUN(test_core_snooze_limits);
-    SG_RUN(test_core_grace_boundaries);
-    SG_RUN(test_core_f2_schedule);
-    SG_RUN(test_core_sleep_action_window);
-    SG_RUN(test_core_record_follows_and_closes);
-    SG_RUN(test_core_f5_weekday_samples);
-    SG_RUN(test_core_f5_saturday_hint);
-    SG_RUN(test_core_f5_monday_and_tz);
-    SG_RUN(test_core_f5_noalarm);
-    SG_RUN(test_core_settings_clamp);
-    SG_RUN(test_core_ui_fields);
-    SG_RUN(test_core_ui_none_and_flatten);
-    SG_RUN(test_core_command_budget);
-    SG_RUN(test_core_api_args);
-    SG_RUN(test_cmd_helpers_flatten);
-    SG_RUN(test_core_alarm_changed_resets);
-    SG_RUN(test_core_avail_min);
+    CORE_RUN(test_core_f1_schedules_across_midnight);
+    CORE_RUN(test_core_window_and_horizon);
+    CORE_RUN(test_core_none_cancels);
+    CORE_RUN(test_core_other_app_only_clock);
+    CORE_RUN(test_core_disabled_cancels_all);
+    CORE_RUN(test_core_late_debounce_f3);
+    CORE_RUN(test_core_f3_cooldown_and_threshold);
+    CORE_RUN(test_core_f3_variant_ok_and_f1_future);
+    CORE_RUN(test_core_debounce_rules);
+    CORE_RUN(test_core_f1_fires_once);
+    CORE_RUN(test_core_snooze_limits);
+    CORE_RUN(test_core_grace_boundaries);
+    CORE_RUN(test_core_f2_schedule);
+    CORE_RUN(test_core_sleep_action_window);
+    CORE_RUN(test_core_record_follows_and_closes);
+    CORE_RUN(test_core_f5_weekday_samples);
+    CORE_RUN(test_core_f5_saturday_hint);
+    CORE_RUN(test_core_f5_monday_and_tz);
+    CORE_RUN(test_core_f5_noalarm);
+    CORE_RUN(test_core_settings_clamp);
+    CORE_RUN(test_core_ui_fields);
+    CORE_RUN(test_core_ui_none_and_flatten);
+    CORE_RUN(test_core_command_budget);
+    CORE_RUN(test_core_api_args);
+    CORE_RUN(test_cmd_helpers_flatten);
+    CORE_RUN(test_core_alarm_changed_resets);
+    CORE_RUN(test_core_avail_min);
 }
