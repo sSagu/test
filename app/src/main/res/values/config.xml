@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Clock apps whose alarms count as "Clock" (SG_PKG_ALLOW). Null creator fails open in code. -->
+    <string-array name="sg_clock_packages">
+        <item>com.sec.android.app.clockpackage</item>
+        <item>com.google.android.deskclock</item>
+    </string-array>
+</resources>
