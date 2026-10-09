@@ -51,7 +51,7 @@ DEV_OBJS  := $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(DEV_SRC))
 TEST_SRC  := $(wildcard tests/*.c)
 TEST_HDRS := $(wildcard tests/*.h)
 INC_HDRS  := $(wildcard $(INC_DIR)/*.h)
-JAVA_SRC  := $(wildcard $(JAVA_DIR)/*.java)
+JAVA_SRC  := $(addprefix $(JAVA_DIR)/,$(addsuffix .java,Native Sg SystemReceiver AlarmReceiver ActionReceiver MainActivity))
 RES_FILES := $(shell find $(RES_DIR) -type f 2>/dev/null)
 
 # Device flags: exactly the S6 set from docs/ADVICE-architecture.md section 6.
@@ -69,21 +69,26 @@ HOST_CFLAGS = -std=c11 -O1 -g -Wall -Wextra -Werror -Wformat=2 -Wconversion -Wsh
 ASAN_FLAGS  = -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer
 TIDY_CHECKS = bugprone-*,cert-*,clang-analyzer-*,misc-*,-misc-no-recursion,readability-*
 
-.PHONY: apk test asan valgrind lint clean check-apk-sources check-test-sources
+.PHONY: apk test asan valgrind lint clean
 
-apk: check-apk-sources $(APK)
+# Clear errors (not "No rule to make target") while parallel cards are still writing sources.
+ifneq ($(filter apk lint,$(or $(MAKECMDGOALS),apk)),)
+MISSING_APK := $(strip $(foreach f,$(DEV_SRC) $(JAVA_SRC) $(MANIFEST) $(RES_DIR)/values/strings.xml,$(if $(wildcard $f),,$f)))
+ifneq ($(MISSING_APK),)
+$(error make apk/lint: missing source(s): $(MISSING_APK) (written by another operator card; not yet present))
+endif
+endif
+ifneq ($(filter test asan valgrind,$(MAKECMDGOALS)),)
+MISSING_TEST := $(strip $(foreach f,$(CORE_SRC),$(if $(wildcard $f),,$f)))
+ifneq ($(MISSING_TEST),)
+$(error make test: missing source(s): $(MISSING_TEST) (written by another operator card; not yet present))
+endif
+ifeq ($(TEST_SRC),)
+$(error make test: no tests/*.c found)
+endif
+endif
 
-check-apk-sources:
-	@for f in $(DEV_SRC) $(JAVA_SRC) $(MANIFEST) $(RES_DIR)/values/strings.xml; do \
-	  [ -f "$$f" ] || { echo "make: missing '$$f' (written by another operator card; make apk cannot run yet)" >&2; exit 1; }; \
-	done
-	@[ -n "$(JAVA_SRC)" ] || { echo "make: no Java sources in $(JAVA_DIR)" >&2; exit 1; }
-
-check-test-sources:
-	@for f in $(CORE_SRC); do \
-	  [ -f "$$f" ] || { echo "make: missing '$$f' (needed by host tests)" >&2; exit 1; }; \
-	done
-	@[ -n "$(TEST_SRC)" ] || { echo "make: no test sources in tests/ (tests/*.c)" >&2; exit 1; }
+apk: $(APK)
 
 # ---- device library -------------------------------------------------------
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c $(INC_HDRS)
@@ -144,19 +149,19 @@ $(HOST_DIR)/sg_test_plain: $(CORE_SRC) $(TEST_SRC) $(INC_HDRS) $(TEST_HDRS)
 	@mkdir -p $(HOST_DIR)
 	$(HOST_CC) $(HOST_CFLAGS) -Itests -o $@ $(CORE_SRC) $(TEST_SRC)
 
-test: check-test-sources $(HOST_DIR)/sg_test_asan
+test: $(HOST_DIR)/sg_test_asan
 	@for tz in $(TEST_TZS); do \
 	  echo "== TZ=$$tz"; TZ=$$tz $(HOST_DIR)/sg_test_asan || exit 1; \
 	done
 
 asan: test
 
-valgrind: check-test-sources $(HOST_DIR)/sg_test_plain
+valgrind: $(HOST_DIR)/sg_test_plain
 	TZ=$(firstword $(TEST_TZS)) valgrind --leak-check=full --show-leak-kinds=all \
 	  --errors-for-leak-kinds=all --error-exitcode=1 $(HOST_DIR)/sg_test_plain
 
 # ---- lint -------------------------------------------------------------------
-lint: check-apk-sources $(APK)
+lint: $(APK)
 	@set -e; \
 	if ! command -v clang-tidy >/dev/null 2>&1; then echo "make lint: clang-tidy not installed" >&2; exit 1; fi; \
 	mkdir -p $(BUILD)/lint-inc; \

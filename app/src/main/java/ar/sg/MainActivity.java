@@ -64,7 +64,7 @@ public final class MainActivity extends android.app.Activity {
         Sg.ensureChannels(this);
         Native.nativeInit(statePath());
         Sg.Observation o = Sg.observe(this);
-        run(Native.nativeSync(o.nowMs, o.nextAlarmMs, o.creator, o.exact, o.notif, Native.REASON_APP_OPEN));
+        run(Native.nativeSync(o.nowMs, o.nextAlarmMs, o.creator, o.exactAllowed, o.notifAllowed, Native.REASON_APP_OPEN));
         bind(Sg.observe(this));
         maybeAskNotifPermission(o);
     }
@@ -75,7 +75,7 @@ public final class MainActivity extends android.app.Activity {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == REQ_NOTIF) {
             Sg.Observation o = Sg.observe(this);
-            run(Native.nativeSync(o.nowMs, o.nextAlarmMs, o.creator, o.exact, o.notif, Native.REASON_APP_OPEN));
+            run(Native.nativeSync(o.nowMs, o.nextAlarmMs, o.creator, o.exactAllowed, o.notifAllowed, Native.REASON_APP_OPEN));
             bind(Sg.observe(this));
         }
     }
@@ -136,7 +136,7 @@ public final class MainActivity extends android.app.Activity {
 
     /** Renders the C view model. A null model (allocation failure) shows the generic error. */
     private void bind(Sg.Observation o) {
-        long[] ui = Native.nativeUiModel(o.nowMs, o.nextAlarmMs, o.creator, o.exact, o.notif);
+        long[] ui = Native.nativeUiModel(o.nowMs, o.nextAlarmMs, o.creator, o.exactAllowed, o.notifAllowed);
         if (ui == null || ui.length < Native.UI_LEN) {
             txtError.setVisibility(View.VISIBLE);
             return;
@@ -150,7 +150,7 @@ public final class MainActivity extends android.app.Activity {
             bindDebt(ui);
             bindJetlag(ui);
             bindSettings(ui);
-            boxNotif.setVisibility(o.notif == 0 ? View.VISIBLE : View.GONE);
+            boxNotif.setVisibility(o.notifAllowed == 0 ? View.VISIBLE : View.GONE);
         } finally {
             binding = false;
         }
@@ -286,7 +286,7 @@ public final class MainActivity extends android.app.Activity {
 
     private void step(int key, int delta) {
         Sg.Observation o = Sg.observe(this);
-        long[] ui = Native.nativeUiModel(o.nowMs, o.nextAlarmMs, o.creator, o.exact, o.notif);
+        long[] ui = Native.nativeUiModel(o.nowMs, o.nextAlarmMs, o.creator, o.exactAllowed, o.notifAllowed);
         if (ui == null || ui.length < Native.UI_LEN) return;
         set(key, setting(ui, key) + delta);   // C clamps to range and step
     }
@@ -294,7 +294,7 @@ public final class MainActivity extends android.app.Activity {
     /** One setting change: C decides, Java runs the commands and re-binds. */
     private void set(int key, int value) {
         Sg.Observation o = Sg.observe(this);
-        run(Native.nativeSet(o.nowMs, o.nextAlarmMs, o.creator, o.exact, o.notif, key, value));
+        run(Native.nativeSet(o.nowMs, o.nextAlarmMs, o.creator, o.exactAllowed, o.notifAllowed, key, value));
         bind(Sg.observe(this));
     }
 
@@ -311,7 +311,7 @@ public final class MainActivity extends android.app.Activity {
     }
 
     private void maybeAskNotifPermission(Sg.Observation o) {
-        if (askedThisRun || o.notif != 0 || Build.VERSION.SDK_INT < 33) return;
+        if (askedThisRun || o.notifAllowed != 0 || Build.VERSION.SDK_INT < 33) return;
         if (Native.nativeGet(Native.SET_NOTIF_PROMPTED) != 0) return;
         askedThisRun = true;
         new AlertDialog.Builder(this)
