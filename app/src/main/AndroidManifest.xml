@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Sueño-Guía. minSdk 35 (device ships Android 16; 35 keeps install possible on an
+     un-updated unit), targetSdk 36 = the OS actually on the Galaxy S25 FE (Android 17
+     opt-ins cannot be tested without a device), compileSdk comes from toolchain.env (37).
+     No INTERNET. No services. Everything exported="false": system broadcasts are still
+     delivered to non-exported receivers (receiver-element doc: exported controls
+     "non-system sources"). -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="ar.sg"
+    android:versionCode="1"
+    android:versionName="1.0">
+
+    <uses-sdk android:minSdkVersion="35" android:targetSdkVersion="36" />
+
+    <!-- Exact reminders. USE_EXACT_ALARM is auto-granted (no user prompt) and exempts the
+         app from the restricted standby bucket; Play policy does not apply to sideloading. -->
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <application
+        android:label="@string/str_app_name"
+        android:icon="@mipmap/ic_launcher"
+        android:allowBackup="false"
+        android:fullBackupContent="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:hasFragileUserData="false"
+        android:extractNativeLibs="false"
+        android:memtagMode="async"
+        android:usesCleartextTraffic="false"
+        android:theme="@style/Theme.SG"
+        android:supportsRtl="false">
+
+        <!-- UI. Content intent of notifications targets this with ACTION_MAIN +
+             CATEGORY_LAUNCHER so it matches the filter even under enforceIntentFilter. -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:excludeFromRecents="false"
+            android:screenOrientation="unspecified">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- System re-read triggers. All sent by the system, so exported=false is enough. -->
+        <receiver
+            android:name=".SystemReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.app.action.NEXT_ALARM_CLOCK_CHANGED" />
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Our own AlarmManager PendingIntents (explicit component, FLAG_IMMUTABLE). -->
+        <receiver
+            android:name=".AlarmReceiver"
+            android:exported="false" />
+
+        <!-- Notification action buttons (explicit component, FLAG_IMMUTABLE). -->
+        <receiver
+            android:name=".ActionReceiver"
+            android:exported="false" />
+    </application>
+</manifest>
