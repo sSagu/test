@@ -235,3 +235,22 @@ Notification ids: F1 = 1001, F2 = 1002, F3 = 1003, F5 = 1005 (re-posting replace
 | SG_F2_TIMEOUT_MIN / SG_F3_TIMEOUT_MIN / SG_F5_TIMEOUT_MIN | int | 60 / 120 / 180 | min | fixed |
 | SG_ONLY_CLOCK_DEFAULT | bool | 1 | flag | package allow-list filter |
 | SG_PKG_ALLOW | string[] | com.sec.android.app.clockpackage, com.google.android.deskclock | pkg | null creator = accept |
+
+## 8. v2: in-app bedtime, reboot re-post, redesigned screen
+
+Authority: docs/ADVICE-v2.md (decisions, tables, task cards); design: docs/design/ (approved 2026-10-10).
+- **In-app "Me voy a dormir"** on the main screen, decided in C (`SG_UI_BED_*`: oculto / disponible desde /
+  disponible hasta / anotado + "Actualizar" / cerrado). Same window as F4 ([T − lead − 120 min, T − 60 min])
+  and the same action path as the notification button, so a dismissed, timed-out or rebooted-away
+  notification no longer prevents logging the night.
+- **A valid bed tap closes the evening**: F1/F2 (including a pending snooze) and the debounce are cancelled
+  and not re-planned for that T, also if the alarm is later moved; visible F1/F2/F3 notifications are removed.
+- **Re-tap updates** the night's bed time (no second record, no extra F5 sample).
+- **Reboot / app update**: an F1 that was showing (or snoozed), unanswered, still inside the bed window and
+  inside its 180-min lifetime is re-posted once, silently, with the remaining timeout. The hourly re-check
+  never re-posts.
+- **Screen redesign**: hero card (alarm day/time, "Te aviso para prepararte a las" / "Aviso enviado a las",
+  in-bed suggestion), 7-night bar chart against the target line, weekly debt, footnote; settings moved to
+  their own screen (gear → SettingsActivity, back arrow / system back). Per-night text rows and the
+  social-jetlag line were removed from the screen (F5 hints remain notifications).
+- Persistence format v1 unchanged.

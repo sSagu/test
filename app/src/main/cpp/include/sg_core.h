@@ -164,7 +164,8 @@ typedef struct {
 
 /* hero: priority top to bottom (first match wins) */
 enum {
-    SG_HERO_NO_ALARM     = 0,  /* enabled, alarm_rel == SG_REL_NONE */
+    SG_HERO_NO_ALARM     = 0,  /* enabled, alarm_rel == SG_REL_NONE (also: rel != NONE but the
+                                  local time of T cannot be computed, so alarm_mod < 0) */
     SG_HERO_ALARM        = 1,  /* enabled, SG_REL_OK: alarm card with bell/moon rows */
     SG_HERO_OTHER_APP    = 2,  /* enabled, SG_REL_OTHER_APP (alarm_mod = that alarm) */
     SG_HERO_OUT_OF_WINDOW= 3,  /* enabled, SG_REL_WINDOW */

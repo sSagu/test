@@ -68,6 +68,50 @@ int sg_log_bed_tap(SgState *s, int64_t now_ms, int64_t T_ms)
     return 1;
 }
 
+int64_t sg_log_open_bed_for(const SgState *s, int64_t T_ms)
+{
+    int newest;
+    const SgNight *n;
+
+    if (s == NULL || T_ms <= 0) {
+        return 0;
+    }
+    newest = newest_index(s);
+    if (newest < 0) {
+        return 0;
+    }
+    n = &s->nights[newest];
+    if (n->closed != 0 || n->wake_ms != T_ms) {
+        return 0;
+    }
+    return n->bed_ms;
+}
+
+int sg_log_bed_retap(SgState *s, int64_t now_ms, int64_t T_ms)
+{
+    int64_t open_bed;
+    int newest;
+    SgNight *n;
+
+    if (s == NULL || now_ms <= 0) {
+        return 0;
+    }
+    open_bed = sg_log_open_bed_for(s, T_ms);
+    if (open_bed <= 0) {
+        return sg_log_bed_tap(s, now_ms, T_ms);
+    }
+    newest = newest_index(s);
+    if (newest < 0) {
+        return 0;
+    }
+    n = &s->nights[newest];
+    if (now_ms <= n->bed_ms) {
+        return 0;
+    }
+    n->bed_ms = now_ms;
+    return 2;
+}
+
 void sg_log_follow_alarm(SgState *s, int64_t T_ms)
 {
     int newest;

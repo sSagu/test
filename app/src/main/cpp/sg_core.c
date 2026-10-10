@@ -240,6 +240,85 @@ static int32_t clamp_step(int32_t v, int32_t lo, int32_t hi, int32_t step)
     return v - (v - lo) % step;
 }
 
+/* ------------------------------------------------------ v2 bedtime helpers */
+
+/* logged(T): the newest record is open and belongs to alarm T (ADVICE-v2 section 2). */
+static int logged_for(const SgState *s, int64_t T)
+{
+    return sg_log_open_bed_for(s, T) > 0;
+}
+
+/* Rule D2: a valid bed tap (or a logged night) closes F1/F2 and the debounce for T. */
+static void mark_handled(SgState *s, int64_t T)
+{
+    s->last_f1_for_T = T;
+    s->last_f2_for_T = T;
+    clear_debounce(s);
+}
+
+/* The SG_CMD_NOTIFY for F1 at `now`: variant and args as fire_f1 always used.
+ * `flags` carries SG_NOTIFY_* bits (0 for a normal post). */
+static void post_f1(const SgState *s, int64_t T, int64_t now, int flags, int32_t timeout_min,
+                    SgCmdList *out)
+{
+    int32_t target = (int32_t)s->target_sleep_min;
+    Loc alarm = loc_of(T);
+    int actions = SG_ACT_SLEEP;
+    int64_t bed_ms;
+    Loc bed;
+
+    if (s->snooze_count < SG_SNOOZE_MAX) {
+        actions |= SG_ACT_SNOOZE;
+    }
+    bed_ms = bed_of(s, T);
+    bed = loc_of(bed_ms);
+    if (bed_ms > now && bed.ok) {
+        sg_cmd_notify(out, SG_NK_F1, SG_TXT_F1_NORMAL, alarm.mod, target, bed.mod,
+                      actions | flags, timeout_min);
+    } else {
+        sg_cmd_notify(out, SG_NK_F1, SG_TXT_F1_LATE, alarm.mod, sg_core_avail_min(T, now), 0,
+                      actions | flags, timeout_min);
+    }
+}
+
+/* Rule R (ADVICE-v2 section 4): after BOOT / PKG_REPLACED, re-post an unanswered F1 once,
+ * silently, with the remaining lifetime. Caller guarantees T relevant, T == last_seen_T and
+ * !logged(T). Touches no other state (cooldown, samples, last_notified_ms stay). */
+static void maybe_repost_f1(SgState *s, const SgObs *o, int reason, int64_t T, int64_t f1,
+                            SgCmdList *out)
+{
+    int64_t now = o->now_ms;
+    int64_t lo;
+    int64_t hi;
+    int64_t since;
+    int32_t timeout;
+
+    if (reason != SG_REASON_BOOT && reason != SG_REASON_PKG_REPLACED) {
+        return;
+    }
+    if (s->last_f1_for_T != T) {
+        return;
+    }
+    if (!has_flag(s, SG_FLAG_F1_POSTED) && s->snooze_count == 0) {
+        return;
+    }
+    lo = f1 - min_ms(SG_BED_WINDOW_BEFORE_MIN);
+    hi = T - min_ms(SG_BED_WINDOW_AFTER_MIN);
+    if (now < lo || now > hi) {
+        return;
+    }
+    since = now - s->last_notified_ms;
+    if (since < 0 || since >= min_ms(SG_F1_TIMEOUT_MIN)) {
+        return;
+    }
+    timeout = SG_F1_TIMEOUT_MIN - (int32_t)(since / SG_MS_PER_MIN);
+    if (timeout < 1) {
+        timeout = 1;
+    }
+    post_f1(s, T, now, SG_NOTIFY_SILENT, timeout, out);
+    put_flag(s, SG_FLAG_F1_POSTED, 1);
+}
+
 /* ------------------------------------------------------- relevance, avail */
 
 int sg_core_relevant(const SgState *s, const SgObs *o)
@@ -300,6 +379,7 @@ int sg_core_sync(SgState *s, const SgObs *o, int reason, SgCmdList *out)
     int64_t T;
     int64_t now;
     int64_t f1;
+    int pending = 0;
 
     if (s == NULL || o == NULL || out == NULL) {
         return SG_E_ARG;
@@ -329,6 +409,7 @@ int sg_core_sync(SgState *s, const SgObs *o, int reason, SgCmdList *out)
     T = o->next_alarm_ms;
 
     if (rel == SG_REL_OK) {
+        pending = (s->debounce_due_ms != 0);
         f1 = f1_of(s, T);
 
         if (T != s->last_seen_T) {
@@ -347,7 +428,13 @@ int sg_core_sync(SgState *s, const SgObs *o, int reason, SgCmdList *out)
             clear_debounce(s);
             sg_log_follow_alarm(s, T);
 
-            if (now < f1) {
+            if (logged_for(s, T)) {
+                /* Rule L: the open record already belongs to T. F1/F2 were cancelled above. */
+                mark_handled(s, T);
+                if (pending) {
+                    sg_cmd_cancel_alarm(out, SG_ALARM_DEBOUNCE);
+                }
+            } else if (now < f1) {
                 s->last_f1_for_T = 0;
                 s->last_f2_for_T = 0;
                 sg_cmd_schedule(out, SG_ALARM_F1, f1, SG_SCHED_EXACT_IDLE);
@@ -364,17 +451,30 @@ int sg_core_sync(SgState *s, const SgObs *o, int reason, SgCmdList *out)
              * was lost (reboot, force-stop, update) or moved into the past (lead change):
              * within grace -> F1 now; later -> one F3 evaluation (fire_debounce then marks
              * T handled, so RECHECK cannot repeat it). */
-            if (s->last_f1_for_T != T) {
-                if (now < f1) {
-                    sg_cmd_schedule(out, SG_ALARM_F1, f1, SG_SCHED_EXACT_IDLE);
-                } else if (now <= f1 + min_ms(SG_F1_GRACE_MIN)) {
-                    sg_cmd_schedule(out, SG_ALARM_F1, now, SG_SCHED_EXACT_IDLE);
-                } else if (has_flag(s, SG_FLAG_LATE_ON) &&
-                           (s->debounce_due_ms == 0 || s->debounce_T == T)) {
-                    start_debounce(s, now, T, out);
+            if (logged_for(s, T)) {
+                /* Rule L: logged means handled; schedule nothing for F1/F2/debounce. */
+                if (s->last_f1_for_T != T) {
+                    sg_cmd_cancel_alarm(out, SG_ALARM_F1);
+                    sg_cmd_cancel_alarm(out, SG_ALARM_F2);
                 }
+                mark_handled(s, T);
+                if (pending) {
+                    sg_cmd_cancel_alarm(out, SG_ALARM_DEBOUNCE);
+                }
+            } else {
+                if (s->last_f1_for_T != T) {
+                    if (now < f1) {
+                        sg_cmd_schedule(out, SG_ALARM_F1, f1, SG_SCHED_EXACT_IDLE);
+                    } else if (now <= f1 + min_ms(SG_F1_GRACE_MIN)) {
+                        sg_cmd_schedule(out, SG_ALARM_F1, now, SG_SCHED_EXACT_IDLE);
+                    } else if (has_flag(s, SG_FLAG_LATE_ON) &&
+                               (s->debounce_due_ms == 0 || s->debounce_T == T)) {
+                        start_debounce(s, now, T, out);
+                    }
+                }
+                sched_f2_or_cancel(s, f1, now, T, out);
+                maybe_repost_f1(s, o, reason, T, f1, out);
             }
-            sched_f2_or_cancel(s, f1, now, T, out);
         }
     } else {
         /* No relevant alarm: cancel F1/F2/F5 hint and their notifications. */
@@ -410,14 +510,13 @@ int sg_core_sync(SgState *s, const SgObs *o, int reason, SgCmdList *out)
 static void fire_f1(SgState *s, const SgObs *o, int rel, int64_t T, SgCmdList *out)
 {
     int64_t now = o->now_ms;
-    int32_t target = (int32_t)s->target_sleep_min;
-    Loc alarm = loc_of(T);
-    int actions;
-    int64_t bed_ms;
-    Loc bed;
     int first;
 
     if (rel != SG_REL_OK || T != s->last_seen_T) {
+        return;
+    }
+    /* Rule D2: a logged night never gets an F1 again, not even a late snoozed one. */
+    if (logged_for(s, T)) {
         return;
     }
     /* Once per T; only a snoozed F1 (snooze_count > 0, notification withdrawn) re-posts. */
@@ -427,20 +526,7 @@ static void fire_f1(SgState *s, const SgObs *o, int rel, int64_t T, SgCmdList *o
     }
     first = (s->last_f1_for_T != T);
 
-    actions = SG_ACT_SLEEP;
-    if (s->snooze_count < SG_SNOOZE_MAX) {
-        actions |= SG_ACT_SNOOZE;
-    }
-
-    bed_ms = bed_of(s, T);
-    bed = loc_of(bed_ms);
-    if (bed_ms > now && bed.ok) {
-        sg_cmd_notify(out, SG_NK_F1, SG_TXT_F1_NORMAL, alarm.mod, target, bed.mod,
-                      actions, SG_F1_TIMEOUT_MIN);
-    } else {
-        sg_cmd_notify(out, SG_NK_F1, SG_TXT_F1_LATE, alarm.mod,
-                      sg_core_avail_min(T, now), 0, actions, SG_F1_TIMEOUT_MIN);
-    }
+    post_f1(s, T, now, 0, SG_F1_TIMEOUT_MIN, out);
 
     s->last_f1_for_T = T;
     s->last_notified_ms = now;
@@ -657,12 +743,14 @@ int sg_core_action(SgState *s, const SgObs *o, int action_id, SgCmdList *out)
     T = o->next_alarm_ms;
 
     if (action_id == SG_ACTION_SLEEP) {
-        if (rel == SG_REL_OK) {
-            int64_t lo = f1_of(s, T) - min_ms(SG_BED_WINDOW_BEFORE_MIN);
-            int64_t hi = T - min_ms(SG_BED_WINDOW_AFTER_MIN);
+        int64_t lo;
+        int64_t hi;
 
+        if (rel == SG_REL_OK) {
+            lo = f1_of(s, T) - min_ms(SG_BED_WINDOW_BEFORE_MIN);
+            hi = T - min_ms(SG_BED_WINDOW_AFTER_MIN);
             if (now >= lo && now <= hi) {
-                int r = sg_log_bed_tap(s, now, T);
+                int r = sg_log_bed_retap(s, now, T);
 
                 if (r == 1) {
                     sample_if_weekday(s, T);
@@ -670,8 +758,20 @@ int sg_core_action(SgState *s, const SgObs *o, int action_id, SgCmdList *out)
                 if (r != 0) {
                     schedule_housekeep(s, now, out);
                 }
+                /* Logged means handled (rule D2): close F1/F2/debounce for T and every
+                 * notification that announces them. */
+                mark_handled(s, T);
+                sg_cmd_cancel_alarm(out, SG_ALARM_F1);
+                sg_cmd_cancel_alarm(out, SG_ALARM_F2);
+                sg_cmd_cancel_alarm(out, SG_ALARM_DEBOUNCE);
+                sg_cmd_cancel_notify(out, SG_NK_F1);
+                sg_cmd_cancel_notify(out, SG_NK_F2);
+                sg_cmd_cancel_notify(out, SG_NK_F3);
+                put_flag(s, SG_FLAG_F1_POSTED, 0);
+                return SG_OK;
             }
         }
+        /* Outside the window (or no relevant alarm): v1 behaviour, nothing is logged. */
         sg_cmd_cancel_notify(out, SG_NK_F1);
         sg_cmd_cancel_notify(out, SG_NK_F3);
         put_flag(s, SG_FLAG_F1_POSTED, 0);
@@ -765,6 +865,134 @@ int32_t sg_core_get(const SgState *s, int key)
 
 /* ----------------------------------------------------------- UI model */
 
+/* hero (ADVICE-v2 section 3): DISABLED first, then by relevance; a relevant alarm whose
+ * local time cannot be computed is shown as NO_ALARM. */
+static int32_t hero_of(const SgState *s, int rel, int al_ok)
+{
+    if (!has_flag(s, SG_FLAG_ENABLED)) {
+        return SG_HERO_DISABLED;
+    }
+    if (rel == SG_REL_NONE || !al_ok) {
+        return SG_HERO_NO_ALARM;
+    }
+    switch (rel) {
+    case SG_REL_OK:
+        return SG_HERO_ALARM;
+    case SG_REL_OTHER_APP:
+        return SG_HERO_OTHER_APP;
+    case SG_REL_WINDOW:
+        return SG_HERO_OUT_OF_WINDOW;
+    case SG_REL_HORIZON:
+        return SG_HERO_FAR;
+    default:
+        return SG_HERO_NO_ALARM;
+    }
+}
+
+/* Bedtime control (ADVICE-v2 section 2). Hidden unless enabled and the alarm is OK. */
+static void ui_bed(const SgState *s, const SgObs *o, int rel, int64_t T, SgUiModel *out)
+{
+    int64_t now = o->now_ms;
+    int64_t lo;
+    int64_t hi;
+    int64_t logged_bed;
+
+    out->bed_state = SG_BED_HIDDEN;
+    out->bed_mod = -1;
+    out->bed_can_update = 0;
+    if (!has_flag(s, SG_FLAG_ENABLED) || rel != SG_REL_OK) {
+        return;
+    }
+    lo = f1_of(s, T) - min_ms(SG_BED_WINDOW_BEFORE_MIN);
+    hi = T - min_ms(SG_BED_WINDOW_AFTER_MIN);
+    logged_bed = sg_log_open_bed_for(s, T);
+    if (logged_bed > 0) {
+        out->bed_state = SG_BED_LOGGED;
+        out->bed_mod = loc_of(logged_bed).mod;
+        out->bed_can_update = (now >= lo && now <= hi) ? 1 : 0;
+    } else if (now < lo) {
+        out->bed_state = SG_BED_BEFORE;
+        out->bed_mod = loc_of(lo).mod;
+    } else if (now <= hi) {
+        out->bed_state = SG_BED_AVAILABLE;
+        out->bed_mod = loc_of(hi).mod;
+    } else {
+        out->bed_state = SG_BED_CLOSED;
+        out->bed_mod = loc_of(hi).mod;
+    }
+}
+
+/* Reminder row of the hero card (ADVICE-v2 section 3). Only for SG_HERO_ALARM. */
+static void ui_remind(const SgState *s, const SgObs *o, int64_t T, SgUiModel *out)
+{
+    int64_t now = o->now_ms;
+    int64_t f1;
+
+    out->remind_state = SG_REMIND_HIDDEN;
+    out->remind_mod = -1;
+    if (out->hero != SG_HERO_ALARM) {
+        return;
+    }
+    f1 = f1_of(s, T);
+    if (s->last_f1_for_T != T && now <= f1 + min_ms(SG_F1_GRACE_MIN)) {
+        out->remind_state = SG_REMIND_UPCOMING;
+        out->remind_mod = loc_of(f1).mod;
+    } else if (s->last_f1_for_T == T &&
+               f1 - min_ms(SG_BED_WINDOW_BEFORE_MIN) <= s->last_notified_ms &&
+               s->last_notified_ms <= now && s->last_notified_ms < T) {
+        out->remind_state = SG_REMIND_SENT;
+        out->remind_mod = loc_of(s->last_notified_ms).mod;
+    } else {
+        out->remind_state = SG_REMIND_NONE;
+    }
+}
+
+/* Every v2 field of the model (ADVICE-v2 section 3, indices 66..84). Runs after the v1
+ * fields are filled, because it reads out->hero and out->week. */
+static void ui_v2(const SgState *s, const SgObs *o, int rel, int64_t T, SgUiModel *out)
+{
+    int32_t i;
+    int32_t label = -1;
+    int32_t est;
+    Loc al = loc_of(T);
+    int enabled = has_flag(s, SG_FLAG_ENABLED);
+
+    out->hero = hero_of(s, rel, al.ok);
+    out->alarm_wday = (rel != SG_REL_NONE) ? al.wday : -1;
+    ui_remind(s, o, T, out);
+    ui_bed(s, o, rel, T, out);
+
+    if (out->week.logged_count == 0) {
+        out->debt_state = SG_DEBT_EMPTY;
+    } else if (out->week.debt_min == 0) {
+        out->debt_state = SG_DEBT_ZERO;
+    } else {
+        out->debt_state = SG_DEBT_SOME;
+    }
+
+    out->notif_banner = (enabled && o->notif_allowed == 0) ? 1 : 0;
+    out->ask_notif = (o->notif_allowed == 0 && !has_flag(s, SG_FLAG_NOTIF_PROMPTED)) ? 1 : 0;
+    out->target_permille = (int32_t)s->target_sleep_min * 1000 / SG_UI_CHART_MAX_MIN;
+
+    for (i = 0; i < SG_DEBT_WINDOW_NIGHTS; i++) {
+        const SgNightView *nv = &out->week.night[i];
+
+        out->bar_permille[i] = -1;
+        if (nv->status == 1) {
+            est = (int32_t)nv->est_sleep_min;
+            if (est < 0) {
+                est = 0;
+            }
+            if (est > SG_UI_CHART_MAX_MIN) {
+                est = SG_UI_CHART_MAX_MIN;
+            }
+            out->bar_permille[i] = est * 1000 / SG_UI_CHART_MAX_MIN;
+            label = i;
+        }
+    }
+    out->label_night = label;
+}
+
 int sg_core_ui(const SgState *s, const SgObs *o, SgUiModel *out)
 {
     int rel;
@@ -847,6 +1075,7 @@ int sg_core_ui(const SgState *s, const SgObs *o, SgUiModel *out)
         out->settings[key] = sg_core_get(s, key);
     }
     out->settings[0] = 0;
+    ui_v2(s, o, rel, T, out);
     return SG_OK;
 }
 
@@ -885,6 +1114,23 @@ void sg_core_ui_flatten(const SgUiModel *m, int64_t out[SG_UI_LEN])
         out[base + 3] = nv->bed_mod;
         out[base + 4] = nv->wake_mod;
         out[base + 5] = nv->est_sleep_min;
+    }
+
+    /* v2 (ADVICE-v2 section 3) */
+    out[SG_UI_HERO] = m->hero;
+    out[SG_UI_ALARM_WDAY] = m->alarm_wday;
+    out[SG_UI_REMIND_STATE] = m->remind_state;
+    out[SG_UI_REMIND_MOD] = m->remind_mod;
+    out[SG_UI_BED_STATE] = m->bed_state;
+    out[SG_UI_BED_MOD] = m->bed_mod;
+    out[SG_UI_BED_CAN_UPDATE] = m->bed_can_update;
+    out[SG_UI_DEBT_STATE] = m->debt_state;
+    out[SG_UI_NOTIF_BANNER] = m->notif_banner;
+    out[SG_UI_ASK_NOTIF] = m->ask_notif;
+    out[SG_UI_TARGET_PERMILLE] = m->target_permille;
+    out[SG_UI_LABEL_NIGHT] = m->label_night;
+    for (i = 0; i < SG_DEBT_WINDOW_NIGHTS; i++) {
+        out[SG_UI_BARS + i] = m->bar_permille[i];
     }
 }
 
