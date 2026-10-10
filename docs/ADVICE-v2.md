@@ -51,7 +51,9 @@ Contract files (advisor-written, operators do NOT edit): `cpp/include/*.h`, `Nat
 `bed_can_update = (state == LOGGED && lo ≤ now ≤ hi)`.
 SLEEP action (both entry points): enabled && rel OK && lo ≤ now ≤ hi → `r = sg_log_bed_retap`; r==1 →
 weekday sample; r≠0 → housekeeping alarm; then always: handled marks (D2), cancel alarms F1, F2,
-DEBOUNCE; cancel notifications F1, F2, F3; clear F1_POSTED. Otherwise v1 behaviour (cancel F1+F3
+DEBOUNCE; cancel notifications F1, F2, F3; clear F1_POSTED. If F1 had not fired for T and weekend drift
+applies (and JETLAG_ON, last_f5_for_T != T), arm SG_ALARM_F5_HINT at now+1 min (R2-C2: the weekend hint
+survives an early tap). Otherwise v1 behaviour (cancel F1+F3
 notifications, clear F1_POSTED, no record). Disabled → no-op (v1).
 
 Edge cases:
@@ -91,9 +93,23 @@ plotPx = `sg_chart_plot_h`; a bar is at least `sg_bar_min_h`.
 ## 4. Reboot / update re-post (C: `sg_core_sync`, header comment R)
 
 On `SG_REASON_BOOT` or `SG_REASON_PKG_REPLACED`, T relevant and == last_seen_T, `last_f1_for_T == T`,
-(`F1_POSTED` || `snooze_count > 0`), !logged(T), lo ≤ now ≤ hi, `0 ≤ now − last_notified_ms < 180 min`
-→ one `NOTIFY F1` (variant/args exactly as fire_f1 at now), a5 = SLEEP | (SNOOZE if count<2) | SILENT,
-a6 = 180 − elapsed_min (≥1); set F1_POSTED. Nothing else changes (cooldown, samples, last_notified_ms).
+(`F1_POSTED` || `snooze_count > 0`), !logged(T), lo ≤ now ≤ hi, `0 ≤ now − last_notified_ms < 180 min`:
+
+- **F1 visible** (`F1_POSTED`) → one `NOTIFY F1` (variant/args exactly as fire_f1 at now), a5 = SLEEP |
+  (SNOOZE if count<2) | SILENT, a6 = 180 − elapsed_min (≥1); set F1_POSTED.
+- **Snooze pending** (`!F1_POSTED`, `snooze_count > 0`; C2 fix) → no NOTIFY. `SCHEDULE F1` at `now + 15 min`
+  (SG_SNOOZE_MIN, EXACT_IDLE): the reboot lost the snooze alarm, an update replaces it (same request code).
+  fire_f1 then posts an audible snoozed F1 with the SNOOZE action. The reminder is never silent.
+
+Nothing else changes (cooldown, samples, last_notified_ms). Command budget unchanged (one command either way).
+
+**Owed re-post (C3 fix, `sg_state.h` field `boot_unseen`, not persisted).** BOOT/PKG_REPLACED with no next
+alarm (`getNextAlarmClock()` null because the clock app has not re-registered yet) and `last_seen_T != 0`
+keeps T's state (no cancels, no `last_seen_T = 0`) and sets `boot_unseen`. The next relevant sync with T
+unchanged runs rule R with reason BOOT, so the broadcast that follows re-posts the unanswered F1. Any OK sync
+clears the flag. The flag only lives in memory; a process death drops it (accepted). The JNI glue
+(`sg_jni.c` mutate) adopts the work state on every SG_OK call and writes the file only when the encoded
+image changed, so an in-memory-only flag such as `boot_unseen` is never lost (R2-C1).
 
 ## 5. View-ID tables (ids are the contract between layouts and Java)
 
@@ -103,7 +119,7 @@ false; Java pads it with systemBars|displayCutout insets) → `LinearLayout styl
 | id | type / style | binds / purpose |
 |---|---|---|
 | txt_screen_title | TextView SgText.Title (w 0, weight 1) in SgTopBar | @string/str_screen_title |
-| btn_settings | ImageButton SgIconButton, src ic_gear, cd str_cd_settings, marginEnd −12dp | opens SettingsActivity |
+| btn_settings | ImageButton SgIconButton, src ic_gear, cd str_cd_settings, no margin (D2: −12dp offset let the hit area leave the top bar) | opens SettingsActivity |
 | txt_error | TextView SgText, gone | visible iff model null/short |
 | box_notif_banner | LinearLayout SgCard | visible iff NOTIF_BANNER==1 |
 | txt_notif_banner / btn_notif_settings | TextView SgText / Button SgButtonOutline (marginTop 12dp) | str_perm_notif_banner / str_perm_notif_open_settings → app notification settings |
@@ -126,11 +142,11 @@ false; Java pads it with systemBars|displayCutout insets) → `LinearLayout styl
 | img_bed_check | ImageView 40dp, bg bg_check_badge, src ic_check, tint sg_on_accent, scaleType center, a11y no | — |
 | txt_bed_logged / txt_bed_logged_sub | SgText.Logged / SgText.Small (in vertical LL w 0 weight 1, margins 14dp) | str_bed_logged(fmtMod(BED_MOD)) / CAN_UPDATE ? str_bed_logged_sub : str_bed_logged_done |
 | btn_bed_update | Button SgButtonOutline, cd str_cd_bed_update | visible iff CAN_UPDATE==1; click → SLEEP |
-| box_week | LinearLayout SgCard | always |
+| box_week | LinearLayout SgCard, clipChildren false (D4) | always |
 | txt_week_title / txt_week_unit | SgText.Section (w 0, weight 1) / SgText.Small, one horizontal row | str_screen_last_nights / str_week_unit |
 | chart | FrameLayout h sg_chart_h, marginTop 14dp | — |
 | chart_target_line | View match×sg_target_line_h, gravity bottom, bg line_dashed, layerType software | bottomMargin = px(TARGET_PERMILLE)+1dp |
-| txt_target_label | TextView SgText.Chart, gravity bottom\|end | str_week_target(fmtHours(settings[TARGET])); bottomMargin = line margin + 4dp |
+| txt_target_label | TextView SgText.Chart, gravity bottom\|start, paddingEnd 4dp, no background, declared BEFORE chart_cols (drawn under the bars so it never hides a bar or value label; UI-1 / UI2-A1; UI-A3/D3: never meets the newest value label) | str_week_target(fmtHours(settings[TARGET])); bottomMargin = line margin + 4dp |
 | chart_baseline | View match×sg_baseline_h, gravity bottom, bg sg_baseline | — |
 | chart_cols | LinearLayout horizontal match×match, paddingBottom 1dp | — |
 | col_0..col_6 | LinearLayout vertical, w 0 weight 1, h match, gravity bottom\|center_horizontal, focusable, importantForAccessibility yes; marginEnd 2dp except col_6 | cd: status1 str_cd_night_value(fmtDate, fmtDur(est)), 0 str_cd_night_empty, 2 str_cd_night_nowake |

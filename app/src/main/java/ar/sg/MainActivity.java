@@ -3,43 +3,73 @@ package ar.sg;
 import android.Manifest;
 import android.app.AlertDialog;
 import android.content.ActivityNotFoundException;
+import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
-import android.os.Build;
+import android.content.IntentFilter;
 import android.os.Bundle;
 import android.provider.Settings;
 import android.view.View;
+import android.view.ViewGroup;
 import android.view.WindowInsets;
 import android.widget.Button;
-import android.widget.CompoundButton;
+import android.widget.FrameLayout;
+import android.widget.ImageButton;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
-import android.widget.Switch;
 import android.widget.TextView;
 
-import java.util.Calendar;
-
 /**
- * The only screen. Java formats; C decides. Every entry: observe -> one Native call
+ * The only main screen. Java renders; C decides. Every entry: observe -> one Native call
  * -> run the returned commands -> bind the UI model returned by nativeUiModel.
- * No threads, handlers or timers.
+ * No threads, handlers or timers. Minutes and dates are formatted here, never computed.
+ * Owner: ui-main (docs/ADVICE-v2.md sections 3, 5, 6).
  */
 public final class MainActivity extends android.app.Activity {
 
     private static final int REQ_NOTIF = 1;
-    private static final int STEP_MIN = 15;
+    private static final int CHART_COLS = 7;
 
-    private boolean binding;          // guards switch listeners while binding
     private boolean askedThisRun;     // permission dialog shown at most once per launch
 
+    /** Re-renders each minute while visible: the bed window opens and closes with the clock.
+     *  Dynamic registration only (no manifest entry); it renders and runs no commands. */
+    private final BroadcastReceiver tick = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context c, Intent i) {
+            bind(Sg.observe(MainActivity.this));
+        }
+    };
+
     private ScrollView root;
-    private TextView txtError, txtNextAlarm, txtNextReminder, txtDebtValue, txtJetlag;
-    private TextView txtLeadValue, txtTargetValue, txtWinddownValue;
-    private TextView[] nights;
+    private TextView txtError;
     private LinearLayout boxNotif;
-    private Switch swEnabled, swWinddown, swLate, swJetlag, swJetlagNoalarm, swOnlyClock;
-    private Button btnLeadMinus, btnLeadPlus, btnTargetMinus, btnTargetPlus;
-    private Button btnWinddownMinus, btnWinddownPlus;
+
+    // hero: alarm card
+    private LinearLayout boxHeroAlarm, rowRemind, rowBedSuggest;
+    private TextView txtAlarmDay, txtAlarmTime, txtRemindLabel, txtRemindTime;
+    private TextView txtBedSuggestLabel, txtBedSuggestTime;
+
+    // hero: message card
+    private LinearLayout boxHeroMsg;
+    private TextView txtHeroMsgTitle, txtHeroMsgBody;
+
+    // bedtime control
+    private LinearLayout boxBed, btnBed, boxBedLogged;
+    private ImageView imgBedMoon;
+    private TextView txtBedHint, txtBedLogged, txtBedLoggedSub;
+    private Button btnBedUpdate;
+
+    // week chart
+    private View chartTargetLine;
+    private TextView txtTargetLabel, txtDebtSub, txtDebtValue;
+    private LinearLayout[] cols;
+    private TextView[] labels;
+    private View[] bars;
+    private View[] dashes;
+    private TextView[] days;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -63,12 +93,29 @@ public final class MainActivity extends android.app.Activity {
     @Override
     protected void onResume() {
         super.onResume();
+        Sg.init(this);
         Sg.ensureChannels(this);
-        Native.nativeInit(statePath());
         Sg.Observation o = Sg.observe(this);
-        run(Native.nativeSync(o.nowMs, o.nextAlarmMs, o.creator, o.exactAllowed, o.notifAllowed, Native.REASON_APP_OPEN));
-        bind(Sg.observe(this));
-        maybeAskNotifPermission(o);
+        run(Native.nativeSync(o.nowMs, o.nextAlarmMs, o.creator, o.exactAllowed, o.notifAllowed,
+                Native.REASON_APP_OPEN));
+        maybeAskNotifPermission(bind(Sg.observe(this)));
+        registerReceiver(tick, new IntentFilter(Intent.ACTION_TIME_TICK), Context.RECEIVER_NOT_EXPORTED);
+    }
+
+    @Override
+    protected void onPause() {
+        unregisterReceiver(tick);
+        super.onPause();
+    }
+
+    /** A heads-up or shade action (e.g. "Me voy a dormir") can change the state while this
+     *  screen stays in front without a resume: re-render whenever it regains focus. */
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus) {
+            bind(Sg.observe(this));
+        }
     }
 
     @Override
@@ -77,229 +124,288 @@ public final class MainActivity extends android.app.Activity {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == REQ_NOTIF) {
             Sg.Observation o = Sg.observe(this);
-            run(Native.nativeSync(o.nowMs, o.nextAlarmMs, o.creator, o.exactAllowed, o.notifAllowed, Native.REASON_APP_OPEN));
+            run(Native.nativeSync(o.nowMs, o.nextAlarmMs, o.creator, o.exactAllowed, o.notifAllowed,
+                    Native.REASON_APP_OPEN));
             bind(Sg.observe(this));
         }
     }
 
-    // ------------------------------------------------------------------ binding
+    // ------------------------------------------------------------------ views
 
     private void bindViews() {
         root = findViewById(R.id.root);
         txtError = findViewById(R.id.txt_error);
-        txtNextAlarm = findViewById(R.id.txt_next_alarm);
-        txtNextReminder = findViewById(R.id.txt_next_reminder);
-        txtDebtValue = findViewById(R.id.txt_debt_value);
-        txtJetlag = findViewById(R.id.txt_jetlag);
-        txtLeadValue = findViewById(R.id.txt_lead_value);
-        txtTargetValue = findViewById(R.id.txt_target_value);
-        txtWinddownValue = findViewById(R.id.txt_winddown_value);
         boxNotif = findViewById(R.id.box_notif_banner);
-        nights = new TextView[]{
-                findViewById(R.id.night_0), findViewById(R.id.night_1), findViewById(R.id.night_2),
-                findViewById(R.id.night_3), findViewById(R.id.night_4), findViewById(R.id.night_5),
-                findViewById(R.id.night_6)};
-        swEnabled = findViewById(R.id.sw_enabled);
-        swWinddown = findViewById(R.id.sw_winddown);
-        swLate = findViewById(R.id.sw_late);
-        swJetlag = findViewById(R.id.sw_jetlag);
-        swJetlagNoalarm = findViewById(R.id.sw_jetlag_noalarm);
-        swOnlyClock = findViewById(R.id.sw_only_clock);
-        for (Switch sw : new Switch[]{swEnabled, swWinddown, swLate, swJetlag, swJetlagNoalarm, swOnlyClock}) {
-            sw.setSaveEnabled(false);   // no restore-time onCheckedChanged before nativeInit
-        }
-        btnLeadMinus = findViewById(R.id.btn_lead_minus);
-        btnLeadPlus = findViewById(R.id.btn_lead_plus);
-        btnTargetMinus = findViewById(R.id.btn_target_minus);
-        btnTargetPlus = findViewById(R.id.btn_target_plus);
-        btnWinddownMinus = findViewById(R.id.btn_winddown_minus);
-        btnWinddownPlus = findViewById(R.id.btn_winddown_plus);
+
+        boxHeroAlarm = findViewById(R.id.box_hero_alarm);
+        txtAlarmDay = findViewById(R.id.txt_alarm_day);
+        txtAlarmTime = findViewById(R.id.txt_alarm_time);
+        rowRemind = findViewById(R.id.row_remind);
+        txtRemindLabel = findViewById(R.id.txt_remind_label);
+        txtRemindTime = findViewById(R.id.txt_remind_time);
+        rowBedSuggest = findViewById(R.id.row_bed_suggest);
+        txtBedSuggestLabel = findViewById(R.id.txt_bed_suggest_label);
+        txtBedSuggestTime = findViewById(R.id.txt_bed_suggest_time);
+
+        boxHeroMsg = findViewById(R.id.box_hero_msg);
+        txtHeroMsgTitle = findViewById(R.id.txt_hero_msg_title);
+        txtHeroMsgBody = findViewById(R.id.txt_hero_msg_body);
+
+        boxBed = findViewById(R.id.box_bed);
+        btnBed = findViewById(R.id.btn_bed);
+        imgBedMoon = findViewById(R.id.img_bed_moon);
+        txtBedHint = findViewById(R.id.txt_bed_hint);
+        boxBedLogged = findViewById(R.id.box_bed_logged);
+        txtBedLogged = findViewById(R.id.txt_bed_logged);
+        txtBedLoggedSub = findViewById(R.id.txt_bed_logged_sub);
+        btnBedUpdate = findViewById(R.id.btn_bed_update);
+
+        chartTargetLine = findViewById(R.id.chart_target_line);
+        txtTargetLabel = findViewById(R.id.txt_target_label);
+        txtDebtSub = findViewById(R.id.txt_debt_sub);
+        txtDebtValue = findViewById(R.id.txt_debt_value);
+
+        cols = new LinearLayout[]{
+                findViewById(R.id.col_0), findViewById(R.id.col_1), findViewById(R.id.col_2),
+                findViewById(R.id.col_3), findViewById(R.id.col_4), findViewById(R.id.col_5),
+                findViewById(R.id.col_6)};
+        labels = new TextView[]{
+                findViewById(R.id.lbl_0), findViewById(R.id.lbl_1), findViewById(R.id.lbl_2),
+                findViewById(R.id.lbl_3), findViewById(R.id.lbl_4), findViewById(R.id.lbl_5),
+                findViewById(R.id.lbl_6)};
+        bars = new View[]{
+                findViewById(R.id.bar_0), findViewById(R.id.bar_1), findViewById(R.id.bar_2),
+                findViewById(R.id.bar_3), findViewById(R.id.bar_4), findViewById(R.id.bar_5),
+                findViewById(R.id.bar_6)};
+        dashes = new View[]{
+                findViewById(R.id.dash_0), findViewById(R.id.dash_1), findViewById(R.id.dash_2),
+                findViewById(R.id.dash_3), findViewById(R.id.dash_4), findViewById(R.id.dash_5),
+                findViewById(R.id.dash_6)};
+        days = new TextView[]{
+                findViewById(R.id.day_0), findViewById(R.id.day_1), findViewById(R.id.day_2),
+                findViewById(R.id.day_3), findViewById(R.id.day_4), findViewById(R.id.day_5),
+                findViewById(R.id.day_6)};
     }
 
     private void wireListeners() {
-        swEnabled.setOnCheckedChangeListener(toggle(Native.SET_ENABLED));
-        swWinddown.setOnCheckedChangeListener(toggle(Native.SET_WINDDOWN_ON));
-        swLate.setOnCheckedChangeListener(toggle(Native.SET_LATE_ON));
-        swJetlag.setOnCheckedChangeListener(toggle(Native.SET_JETLAG_ON));
-        swJetlagNoalarm.setOnCheckedChangeListener(toggle(Native.SET_JETLAG_NOALARM));
-        swOnlyClock.setOnCheckedChangeListener(toggle(Native.SET_ONLY_CLOCK));
-
-        btnLeadMinus.setOnClickListener(stepper(Native.SET_LEAD_MIN, -STEP_MIN));
-        btnLeadPlus.setOnClickListener(stepper(Native.SET_LEAD_MIN, STEP_MIN));
-        btnTargetMinus.setOnClickListener(stepper(Native.SET_TARGET_MIN, -STEP_MIN));
-        btnTargetPlus.setOnClickListener(stepper(Native.SET_TARGET_MIN, STEP_MIN));
-        btnWinddownMinus.setOnClickListener(stepper(Native.SET_WINDDOWN_MIN, -STEP_MIN));
-        btnWinddownPlus.setOnClickListener(stepper(Native.SET_WINDDOWN_MIN, STEP_MIN));
-
+        ImageButton btnSettings = findViewById(R.id.btn_settings);
+        btnSettings.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { openSettings(); }
+        });
         findViewById(R.id.btn_notif_settings).setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) { openNotificationSettings(); }
         });
-        findViewById(R.id.btn_clear_log).setOnClickListener(new View.OnClickListener() {
-            @Override public void onClick(View v) { confirmClearLog(); }
+        btnBed.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { sleep(); }
+        });
+        // Rendering only: the pill is a LinearLayout, so announce it with the Button role (UI-3).
+        btnBed.setAccessibilityDelegate(new View.AccessibilityDelegate() {
+            @Override public void onInitializeAccessibilityNodeInfo(View host,
+                    android.view.accessibility.AccessibilityNodeInfo info) {
+                super.onInitializeAccessibilityNodeInfo(host, info);
+                info.setClassName(Button.class.getName());
+            }
+        });
+        btnBedUpdate.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { sleep(); }
         });
     }
 
-    /** Renders the C view model. A null model (allocation failure) shows the generic error. */
-    private void bind(Sg.Observation o) {
+    // ------------------------------------------------------------------ binding
+
+    /** Renders the C view model. Returns it, or null when the model is unavailable. */
+    private long[] bind(Sg.Observation o) {
         long[] ui = Native.nativeUiModel(o.nowMs, o.nextAlarmMs, o.creator, o.exactAllowed, o.notifAllowed);
         if (ui == null || ui.length < Native.UI_LEN) {
             txtError.setVisibility(View.VISIBLE);
-            return;
+            return null;
         }
         txtError.setVisibility(View.GONE);
-        binding = true;
-        try {
-            bindNextAlarm(ui);
-            bindNextReminder(ui);
-            bindNights(ui);
-            bindDebt(ui);
-            bindJetlag(ui);
-            bindSettings(ui);
-            boxNotif.setVisibility(o.notifAllowed == 0 ? View.VISIBLE : View.GONE);
-        } finally {
-            binding = false;
-        }
+        boxNotif.setVisibility(visible(ui[Native.UI_NOTIF_BANNER] != 0));
+        bindHero(ui);
+        bindBed(ui);
+        bindWeek(ui);
+        return ui;
     }
 
-    private void bindNextAlarm(long[] ui) {
-        int rel = (int) ui[Native.UI_ALARM_REL];
-        if (rel == Native.REL_NONE) {
-            txtNextAlarm.setText(R.string.str_screen_next_alarm_none);
-        } else if (rel == Native.REL_OTHER_APP) {
-            txtNextAlarm.setText(getString(R.string.str_screen_next_alarm_ignored, fmtMs(ui[Native.UI_NEXT_ALARM_MS])));
+    private void bindHero(long[] ui) {
+        int hero = (int) ui[Native.UI_HERO];
+        boolean alarm = hero == Native.HERO_ALARM;
+        boxHeroAlarm.setVisibility(visible(alarm));
+        boxHeroMsg.setVisibility(visible(!alarm));
+        if (alarm) {
+            bindAlarmCard(ui);
         } else {
-            int mod = (int) ui[Native.UI_ALARM_MOD];
-            String t = mod >= 0 ? fmtMod(mod) : fmtMs(ui[Native.UI_NEXT_ALARM_MS]);
-            txtNextAlarm.setText(getString(R.string.str_screen_next_alarm, t));
+            bindMessage(ui, hero);
         }
     }
 
-    private void bindNextReminder(long[] ui) {
-        long ms = ui[Native.UI_NEXT_REMINDER_MS];
-        if (ms == 0) {
-            txtNextReminder.setText(R.string.str_screen_next_reminder_none);
-        } else {
-            txtNextReminder.setText(getString(R.string.str_screen_next_reminder, fmtMs(ms)));
-        }
+    private void bindAlarmCard(long[] ui) {
+        txtAlarmDay.setText(getString(R.string.str_hero_alarm_day,
+                fmtDate(ui[Native.UI_ALARM_DATE], (int) ui[Native.UI_ALARM_WDAY])));
+        txtAlarmTime.setText(fmtMod((int) ui[Native.UI_ALARM_MOD]));
+
+        int remind = (int) ui[Native.UI_REMIND_STATE];
+        rowRemind.setVisibility(visible(remind != Native.REMIND_HIDDEN));
+        txtRemindLabel.setText(remindLabel(remind));
+        int remindMod = (int) ui[Native.UI_REMIND_MOD];
+        txtRemindTime.setVisibility(visible(remindMod >= 0));
+        txtRemindTime.setText(fmtMod(remindMod));
+
+        int suggest = (int) ui[Native.UI_BED_SUGGEST_MOD];
+        rowBedSuggest.setVisibility(visible(suggest >= 0));
+        txtBedSuggestLabel.setText(getString(R.string.str_bed_suggest_label,
+                fmtHours(setting(ui, Native.SET_TARGET_MIN))));
+        txtBedSuggestTime.setText(fmtMod(suggest));
     }
 
-    private void bindNights(long[] ui) {
-        for (int i = 0; i < nights.length; i++) {
+    private void bindMessage(long[] ui, int hero) {
+        int mod = (int) ui[Native.UI_ALARM_MOD];
+        String title;
+        String body;
+        switch (hero) {
+            case Native.HERO_NO_ALARM:
+                title = getString(R.string.str_hero_none_title);
+                body = getString(R.string.str_hero_none_body);
+                break;
+            case Native.HERO_OTHER_APP:
+                title = getString(R.string.str_hero_other_title, fmtMod(mod));
+                body = getString(R.string.str_hero_other_body);
+                break;
+            case Native.HERO_OUT_OF_WINDOW:
+                title = getString(R.string.str_hero_window_title, fmtMod(mod));
+                body = getString(R.string.str_hero_window_body);
+                break;
+            case Native.HERO_FAR:
+                title = getString(R.string.str_hero_far_title,
+                        fmtDate(ui[Native.UI_ALARM_DATE], (int) ui[Native.UI_ALARM_WDAY]), fmtMod(mod));
+                body = getString(R.string.str_hero_far_body);
+                break;
+            default:   // HERO_DISABLED
+                title = getString(R.string.str_hero_off_title);
+                body = getString(R.string.str_hero_off_body);
+                break;
+        }
+        txtHeroMsgTitle.setText(title);
+        txtHeroMsgBody.setText(body);
+    }
+
+    private void bindBed(long[] ui) {
+        int bed = (int) ui[Native.UI_BED_STATE];
+        int mod = (int) ui[Native.UI_BED_MOD];
+
+        boolean control = bed == Native.BED_BEFORE || bed == Native.BED_AVAILABLE
+                || bed == Native.BED_CLOSED;
+        boxBed.setVisibility(visible(control));
+        boolean tappable = bed == Native.BED_AVAILABLE;
+        btnBed.setEnabled(tappable);
+        imgBedMoon.setVisibility(visible(tappable));
+        txtBedHint.setText(bedHint(bed, mod));
+
+        boolean logged = bed == Native.BED_LOGGED;
+        boxBedLogged.setVisibility(visible(logged));
+        txtBedLogged.setText(getString(R.string.str_bed_logged, fmtMod(mod)));
+        boolean canUpdate = ui[Native.UI_BED_CAN_UPDATE] != 0;
+        txtBedLoggedSub.setText(canUpdate ? R.string.str_bed_logged_sub : R.string.str_bed_logged_done);
+        btnBedUpdate.setVisibility(visible(canUpdate));
+    }
+
+    private void bindWeek(long[] ui) {
+        // dashed target line and its label, positioned from TARGET_PERMILLE
+        int target = (int) ui[Native.UI_TARGET_PERMILLE];
+        int lineMargin = permillePx(target) + getResources().getDimensionPixelSize(R.dimen.sg_baseline_h);
+        setBottomMargin(chartTargetLine, lineMargin);
+        setBottomMargin(txtTargetLabel,
+                lineMargin + getResources().getDimensionPixelSize(R.dimen.sg_bar_label_gap));
+        txtTargetLabel.setText(getString(R.string.str_week_target,
+                fmtHours(setting(ui, Native.SET_TARGET_MIN))));
+
+        int label = (int) ui[Native.UI_LABEL_NIGHT];
+        int minBar = getResources().getDimensionPixelSize(R.dimen.sg_bar_min_h);
+        for (int i = 0; i < CHART_COLS; i++) {
             int base = Native.UI_NIGHTS + i * Native.UI_NIGHT_WORDS;
-            long date = ui[base];
-            int status = (int) ui[base + 2];
-            String day = fmtDate(date);
-            String text;
-            if (status == 1) {
-                text = getString(R.string.str_screen_night_row, day,
-                        fmtMod((int) ui[base + 3]), fmtMod((int) ui[base + 4]), fmtDur((int) ui[base + 5]));
-            } else if (status == 2) {
-                text = day + ": " + getString(R.string.str_screen_night_nowake);
+            long date = ui[base + Native.NIGHT_DATE];
+            int wday = (int) ui[base + Native.NIGHT_WDAY];
+            int status = (int) ui[base + Native.NIGHT_STATUS];
+            int est = (int) ui[base + Native.NIGHT_EST_MIN];
+            int permille = (int) ui[Native.UI_BARS + i];
+
+            days[i].setText(wdayShort(wday));
+            if (permille < 0) {
+                bars[i].setVisibility(View.GONE);
+                dashes[i].setVisibility(View.VISIBLE);
             } else {
-                text = day + ": " + getString(R.string.str_screen_night_empty);
+                bars[i].setVisibility(View.VISIBLE);
+                dashes[i].setVisibility(View.GONE);
+                setHeight(bars[i], Math.max(permillePx(permille), minBar));
             }
-            nights[i].setText(text);
-        }
-    }
 
-    private void bindDebt(long[] ui) {
-        long debt = ui[Native.UI_DEBT_MIN];
+            boolean showLabel = i == label;
+            labels[i].setVisibility(visible(showLabel));
+            if (showLabel) {
+                labels[i].setText(fmtShort(est));
+            }
+
+            String when = fmtDate(date, wday);
+            String desc;
+            if (status == Native.NIGHT_LOGGED) {
+                desc = getString(R.string.str_cd_night_value, when, fmtDur(est));
+            } else if (status == Native.NIGHT_NOWAKE) {
+                desc = getString(R.string.str_cd_night_nowake, when);
+            } else {
+                desc = getString(R.string.str_cd_night_empty, when);
+            }
+            cols[i].setContentDescription(desc);
+        }
+
+        int debtState = (int) ui[Native.UI_DEBT_STATE];
         int logged = (int) ui[Native.UI_LOGGED_COUNT];
-        if (logged == 0) {
-            txtDebtValue.setText(R.string.str_screen_debt_empty);
-        } else if (debt == 0) {
-            txtDebtValue.setText(R.string.str_screen_debt_zero);
+        if (debtState == Native.DEBT_EMPTY) {
+            txtDebtSub.setText(R.string.str_debt_empty);
+            txtDebtValue.setVisibility(View.GONE);
         } else {
-            txtDebtValue.setText(getString(R.string.str_screen_debt_value, fmtDur((int) debt), logged));
-        }
-    }
-
-    private void bindJetlag(long[] ui) {
-        int status = (int) ui[Native.UI_JETLAG_STATUS];
-        switch (status) {
-            case 0:
-                txtJetlag.setVisibility(View.VISIBLE);
-                txtJetlag.setText(R.string.str_screen_jetlag_nodata);
-                break;
-            case 1:
-                txtJetlag.setVisibility(View.VISIBLE);
-                txtJetlag.setText(R.string.str_screen_jetlag_ok);
-                break;
-            case 3: {
-                int ref = (int) ui[Native.UI_WEEKDAY_REF_MOD];
-                int suggest = ((ref + 60 + STEP_MIN / 2) / STEP_MIN * STEP_MIN) % 1440;
-                txtJetlag.setVisibility(View.VISIBLE);
-                txtJetlag.setText(getString(R.string.str_f5_title_alarm) + "\n"
-                        + getString(R.string.str_f5_body_alarm, fmtMod((int) ui[Native.UI_ALARM_MOD]),
-                        fmtDur((int) ui[Native.UI_JETLAG_DELTA]), fmtMod(suggest)));
-                break;
+            txtDebtSub.setText(getResources().getQuantityString(R.plurals.str_debt_over_nights, logged, logged));
+            txtDebtValue.setVisibility(View.VISIBLE);
+            if (debtState == Native.DEBT_ZERO) {
+                txtDebtValue.setText(R.string.str_debt_none);
+            } else {
+                txtDebtValue.setText(fmtDur((int) ui[Native.UI_DEBT_MIN]));
             }
-            default:
-                txtJetlag.setVisibility(View.GONE);
-                break;
         }
-    }
-
-    private void bindSettings(long[] ui) {
-        boolean winddownOn = setting(ui, Native.SET_WINDDOWN_ON) != 0;
-        swEnabled.setChecked(setting(ui, Native.SET_ENABLED) != 0);
-        swWinddown.setChecked(winddownOn);
-        swLate.setChecked(setting(ui, Native.SET_LATE_ON) != 0);
-        swJetlag.setChecked(setting(ui, Native.SET_JETLAG_ON) != 0);
-        swJetlagNoalarm.setChecked(setting(ui, Native.SET_JETLAG_NOALARM) != 0);
-        swOnlyClock.setChecked(setting(ui, Native.SET_ONLY_CLOCK) != 0);
-
-        int lead = setting(ui, Native.SET_LEAD_MIN);
-        int target = setting(ui, Native.SET_TARGET_MIN);
-        int wind = setting(ui, Native.SET_WINDDOWN_MIN);
-        txtLeadValue.setText(getString(R.string.str_settings_lead_summary, fmtDur(lead)));
-        txtTargetValue.setText(fmtDur(target));
-        txtWinddownValue.setText(fmtDur(wind));
-        btnWinddownMinus.setEnabled(winddownOn);
-        btnWinddownPlus.setEnabled(winddownOn);
-        txtWinddownValue.setEnabled(winddownOn);
     }
 
     private static int setting(long[] ui, int key) {
         return (int) ui[Native.UI_SETTINGS + key];
     }
 
+    private static int visible(boolean on) {
+        return on ? View.VISIBLE : View.GONE;
+    }
+
+    private int remindLabel(int remind) {
+        switch (remind) {
+            case Native.REMIND_UPCOMING: return R.string.str_remind_upcoming;
+            case Native.REMIND_SENT: return R.string.str_remind_sent;
+            default: return R.string.str_remind_none;
+        }
+    }
+
+    private String bedHint(int bed, int mod) {
+        switch (bed) {
+            case Native.BED_BEFORE: return getString(R.string.str_bed_before, fmtMod(mod));
+            case Native.BED_AVAILABLE: return getString(R.string.str_bed_available, fmtMod(mod));
+            case Native.BED_CLOSED: return getString(R.string.str_bed_closed, fmtMod(mod));
+            default: return "";
+        }
+    }
+
     // ------------------------------------------------------------------ actions
 
-    private CompoundButton.OnCheckedChangeListener toggle(final int key) {
-        return new CompoundButton.OnCheckedChangeListener() {
-            @Override
-            public void onCheckedChanged(CompoundButton b, boolean on) {
-                if (!binding) set(key, on ? 1 : 0);
-            }
-        };
-    }
-
-    private View.OnClickListener stepper(final int key, final int delta) {
-        return new View.OnClickListener() {
-            @Override
-            public void onClick(View v) { step(key, delta); }
-        };
-    }
-
-    private DialogInterface.OnClickListener setOnConfirm(final int key, final int value) {
-        return new DialogInterface.OnClickListener() {
-            @Override
-            public void onClick(DialogInterface d, int w) { set(key, value); }
-        };
-    }
-
-    private void step(int key, int delta) {
+    /** "Me voy a dormir" / "Actualizar": same C entry point as the notification button. */
+    private void sleep() {
         Sg.Observation o = Sg.observe(this);
-        long[] ui = Native.nativeUiModel(o.nowMs, o.nextAlarmMs, o.creator, o.exactAllowed, o.notifAllowed);
-        if (ui == null || ui.length < Native.UI_LEN) return;
-        set(key, setting(ui, key) + delta);   // C clamps to range and step
-    }
-
-    /** One setting change: C decides, Java runs the commands and re-binds. */
-    private void set(int key, int value) {
-        Sg.Observation o = Sg.observe(this);
-        run(Native.nativeSet(o.nowMs, o.nextAlarmMs, o.creator, o.exactAllowed, o.notifAllowed, key, value));
+        run(Native.nativeAction(o.nowMs, o.nextAlarmMs, o.creator, o.exactAllowed, o.notifAllowed,
+                Native.ACTION_SLEEP));
         bind(Sg.observe(this));
     }
 
@@ -307,17 +413,19 @@ public final class MainActivity extends android.app.Activity {
         if (cmds != null) Sg.run(this, cmds);
     }
 
-    private void confirmClearLog() {
-        new AlertDialog.Builder(this)
-                .setMessage(R.string.str_settings_clear_confirm)
-                .setPositiveButton(R.string.str_btn_confirm, setOnConfirm(Native.SET_CLEAR_LOG, 1))
-                .setNegativeButton(R.string.str_btn_cancel, null)
-                .show();
+    /** One setting change through C (used by the permission dialog only). */
+    private void set(int key, int value) {
+        Sg.Observation o = Sg.observe(this);
+        run(Native.nativeSet(o.nowMs, o.nextAlarmMs, o.creator, o.exactAllowed, o.notifAllowed, key, value));
+        bind(Sg.observe(this));
     }
 
-    private void maybeAskNotifPermission(Sg.Observation o) {
-        if (askedThisRun || o.notifAllowed != 0 || Build.VERSION.SDK_INT < 33) return;
-        if (Native.nativeGet(Native.SET_NOTIF_PROMPTED) != 0) return;
+    private void openSettings() {
+        startActivity(new Intent(this, SettingsActivity.class));
+    }
+
+    private void maybeAskNotifPermission(long[] ui) {
+        if (askedThisRun || ui == null || ui[Native.UI_ASK_NOTIF] == 0) return;
         askedThisRun = true;
         new AlertDialog.Builder(this)
                 .setTitle(R.string.str_perm_notif_title)
@@ -330,7 +438,12 @@ public final class MainActivity extends android.app.Activity {
                         requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, REQ_NOTIF);
                     }
                 })
-                .setNegativeButton(R.string.str_perm_notif_later, setOnConfirm(Native.SET_NOTIF_PROMPTED, 1))
+                .setNegativeButton(R.string.str_perm_notif_later, new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface d, int w) {
+                        set(Native.SET_NOTIF_PROMPTED, 1);
+                    }
+                })
                 .show();
     }
 
@@ -340,44 +453,63 @@ public final class MainActivity extends android.app.Activity {
         try {
             startActivity(i);
         } catch (ActivityNotFoundException e) {
-            txtError.setText(R.string.str_error_generic);
             txtError.setVisibility(View.VISIBLE);
         }
     }
 
-    // ------------------------------------------------------------------ formatting
+    // ------------------------------------------------------------------ rendering helpers
 
-    private String statePath() {
-        return getFilesDir().getAbsolutePath() + "/sg_state.bin";
-    }
-
-    /** mod = minute of day. */
+    /** mod = minute of day; a negative value renders as nothing. */
     private String fmtMod(int mod) {
+        if (mod < 0) return "";
         return getString(R.string.str_fmt_time, mod / 60, mod % 60);
     }
 
-    private String fmtMs(long ms) {
-        Calendar c = Calendar.getInstance();
-        c.setTimeInMillis(ms);
-        return getString(R.string.str_fmt_time, c.get(Calendar.HOUR_OF_DAY), c.get(Calendar.MINUTE));
-    }
-
+    /** Minutes to "N min" below one hour, else "H h MM min". */
     private String fmtDur(int min) {
         if (min < 60) return getString(R.string.str_fmt_duration_min, min);
         return getString(R.string.str_fmt_duration, min / 60, min % 60);
     }
 
-    /** yyyymmdd -> "lun 9/10" style (weekday, day, month). */
-    private String fmtDate(long yyyymmdd) {
-        if (yyyymmdd == 0) return "";
-        int y = (int) (yyyymmdd / 10000);
+    /** Whole hours as "H h" (target line, suggestion), otherwise the full duration. */
+    private String fmtHours(int min) {
+        if (min % 60 == 0) return getString(R.string.str_fmt_duration_hours, min / 60);
+        return fmtDur(min);
+    }
+
+    /** Chart value label: "H h MM". */
+    private String fmtShort(int min) {
+        return getString(R.string.str_fmt_duration_short, min / 60, min % 60);
+    }
+
+    /** yyyymmdd and weekday (0 = dom .. 6 = sáb) to "vie 9/10". */
+    private String fmtDate(long yyyymmdd, int wday) {
+        if (yyyymmdd == 0 || wday < 0 || wday > 6) return "";
         int m = (int) (yyyymmdd / 100 % 100);
         int d = (int) (yyyymmdd % 100);
-        Calendar c = Calendar.getInstance();
-        c.clear();
-        c.set(y, m - 1, d);
-        String[] wd = getResources().getStringArray(R.array.str_wday_short);
-        String wday = wd[c.get(Calendar.DAY_OF_WEEK) - 1];
-        return getString(R.string.str_fmt_date_short, wday, d, m);
+        return getString(R.string.str_fmt_date_short, wdayShort(wday), d, m);
+    }
+
+    private String wdayShort(int wday) {
+        if (wday < 0 || wday > 6) return "";
+        return getResources().getStringArray(R.array.str_wday_short)[wday];
+    }
+
+    /** Pixel height of a permille value on the chart plot (permille * plotPx / 1000). */
+    private int permillePx(int permille) {
+        int plot = getResources().getDimensionPixelSize(R.dimen.sg_chart_plot_h);
+        return permille * plot / Native.PERMILLE_FULL;
+    }
+
+    private static void setHeight(View v, int px) {
+        ViewGroup.LayoutParams lp = v.getLayoutParams();
+        lp.height = px;
+        v.setLayoutParams(lp);
+    }
+
+    private static void setBottomMargin(View v, int px) {
+        FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) v.getLayoutParams();
+        lp.bottomMargin = px;
+        v.setLayoutParams(lp);
     }
 }

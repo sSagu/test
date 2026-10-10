@@ -1,7 +1,7 @@
 /* sg_jni.c - JNI glue for ar.sg.Native (ADVICE-architecture §4).
  * One static SgState guarded by one mutex. Every mutating call: lock, work on a
- * copy, persist if the encoded image changed, flatten commands, unlock, then build
- * the Java array from a stack buffer. No C->Java calls, no global refs, no cached
+ * copy, adopt the copy, persist if the encoded image changed, flatten commands, unlock,
+ * then build the Java array from a stack buffer. No C->Java calls, no global refs, no cached
  * JNIEnv. Only JNI_OnLoad / JNI_OnUnload are exported.
  */
 #include <jni.h>
@@ -136,11 +136,13 @@ static jlongArray mutate(JNIEnv *env, MutFn fn, const SgObs *o, int arg, int32_t
     ensure_ready_locked();
     work = g_state;
     if (fn(&work, o, arg, arg2, &list) == SG_OK) {
-        if (state_changed(&g_state, &work)) {
-            g_state = work;
-            if (g_loaded) {
-                (void)sg_store_save(g_path, &g_state);
-            }
+        int changed = state_changed(&g_state, &work);
+
+        /* Adopt always: SgState also holds in-memory-only fields (boot_unseen,
+         * ADVICE-v2 section 4) that the encoded image does not show. */
+        g_state = work;
+        if (changed && g_loaded) {
+            (void)sg_store_save(g_path, &g_state);
         }
         n = sg_cmd_flatten(&list, words, (int32_t)(sizeof words / sizeof words[0]));
     }

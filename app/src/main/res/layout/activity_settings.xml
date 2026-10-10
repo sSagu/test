@@ -1,0 +1,221 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Settings screen (docs/ADVICE-v2.md section 5 table 2; mockup docs/design/settings-screen.dc.html).
+     Owner: ui-settings. Every user-facing text comes from strings.xml; styles from values/styles.xml. -->
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/settings_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/sg_ground"
+    android:fillViewport="true"
+    android:clipToPadding="false"
+    android:scrollbars="none">
+
+    <LinearLayout
+        style="@style/SgScreenColumn">
+
+        <!-- top bar: back arrow (48 dp, starts 12 dp left of the column) + title -->
+        <LinearLayout
+            style="@style/SgTopBar"
+            android:layout_marginStart="@dimen/sg_back_offset">
+
+            <ImageButton
+                android:id="@+id/btn_back"
+                style="@style/SgIconButton"
+                android:src="@drawable/ic_back"
+                android:contentDescription="@string/str_cd_back" />
+
+            <TextView
+                android:id="@+id/txt_settings_title"
+                style="@style/SgText.Title"
+                android:layout_marginStart="4dp"
+                android:text="@string/str_settings_title" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/txt_settings_error"
+            style="@style/SgText"
+            android:layout_marginTop="@dimen/sg_gap"
+            android:text="@string/str_error_generic"
+            android:visibility="gone" />
+
+        <!-- card 1: reminders -->
+        <LinearLayout
+            android:id="@+id/card_reminders"
+            style="@style/SgCard.Settings"
+            android:orientation="vertical">
+
+            <TextView
+                style="@style/SgText.CardHeader"
+                android:text="@string/str_settings_section_reminders" />
+
+            <LinearLayout
+                android:id="@+id/row_lead"
+                style="@style/SgStepRow">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:id="@+id/txt_lead_label"
+                        style="@style/SgText.SettingTitle"
+                        android:text="@string/str_settings_lead" />
+
+                    <TextView
+                        android:id="@+id/txt_lead_range"
+                        style="@style/SgText.Small"
+                        android:layout_marginTop="2dp"
+                        android:text="@string/str_settings_lead_range" />
+                </LinearLayout>
+
+                <Button
+                    android:id="@+id/btn_lead_minus"
+                    style="@style/SgStepButton"
+                    android:text="@string/str_step_minus"
+                    android:contentDescription="@string/str_cd_lead_minus" />
+
+                <TextView
+                    android:id="@+id/txt_lead_value"
+                    style="@style/SgText.StepValue" />
+
+                <Button
+                    android:id="@+id/btn_lead_plus"
+                    style="@style/SgStepButton"
+                    android:text="@string/str_step_plus"
+                    android:contentDescription="@string/str_cd_lead_plus" />
+            </LinearLayout>
+
+            <View style="@style/SgDivider" />
+
+            <LinearLayout
+                android:id="@+id/row_target"
+                style="@style/SgStepRow">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:id="@+id/txt_target_label"
+                        style="@style/SgText.SettingTitle"
+                        android:text="@string/str_settings_target" />
+
+                    <TextView
+                        android:id="@+id/txt_target_range"
+                        style="@style/SgText.Small"
+                        android:layout_marginTop="2dp"
+                        android:text="@string/str_settings_target_range" />
+                </LinearLayout>
+
+                <Button
+                    android:id="@+id/btn_target_minus"
+                    style="@style/SgStepButton"
+                    android:text="@string/str_step_minus"
+                    android:contentDescription="@string/str_cd_target_minus" />
+
+                <TextView
+                    android:id="@+id/txt_target_value"
+                    style="@style/SgText.StepValue" />
+
+                <Button
+                    android:id="@+id/btn_target_plus"
+                    style="@style/SgStepButton"
+                    android:text="@string/str_step_plus"
+                    android:contentDescription="@string/str_cd_target_plus" />
+            </LinearLayout>
+
+            <View style="@style/SgDivider" />
+
+            <Switch
+                android:id="@+id/sw_enabled"
+                style="@style/SgSwitch"
+                android:text="@string/str_settings_enabled" />
+
+            <Switch
+                android:id="@+id/sw_late"
+                style="@style/SgSwitch"
+                android:text="@string/str_settings_late" />
+
+            <Switch
+                android:id="@+id/sw_winddown"
+                style="@style/SgSwitch"
+                android:text="@string/str_settings_winddown" />
+
+            <!-- visible only while the wind-down reminder is on -->
+            <LinearLayout
+                android:id="@+id/row_winddown_min"
+                style="@style/SgStepRow"
+                android:visibility="gone">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:id="@+id/txt_winddown_label"
+                        style="@style/SgText.SettingTitle"
+                        android:text="@string/str_settings_winddown_min" />
+
+                    <TextView
+                        android:id="@+id/txt_winddown_range"
+                        style="@style/SgText.Small"
+                        android:layout_marginTop="2dp"
+                        android:text="@string/str_settings_winddown_range" />
+                </LinearLayout>
+
+                <Button
+                    android:id="@+id/btn_winddown_minus"
+                    style="@style/SgStepButton"
+                    android:text="@string/str_step_minus"
+                    android:contentDescription="@string/str_cd_winddown_minus" />
+
+                <TextView
+                    android:id="@+id/txt_winddown_value"
+                    style="@style/SgText.StepValue" />
+
+                <Button
+                    android:id="@+id/btn_winddown_plus"
+                    style="@style/SgStepButton"
+                    android:text="@string/str_step_plus"
+                    android:contentDescription="@string/str_cd_winddown_plus" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- card 2: weekend and alarms -->
+        <LinearLayout
+            android:id="@+id/card_weekend"
+            style="@style/SgCard.Settings"
+            android:orientation="vertical">
+
+            <TextView
+                style="@style/SgText.CardHeader"
+                android:text="@string/str_settings_section_weekend" />
+
+            <Switch
+                android:id="@+id/sw_jetlag"
+                style="@style/SgSwitch"
+                android:text="@string/str_settings_jetlag" />
+
+            <Switch
+                android:id="@+id/sw_jetlag_noalarm"
+                style="@style/SgSwitch"
+                android:text="@string/str_settings_jetlag_noalarm" />
+
+            <Switch
+                android:id="@+id/sw_only_clock"
+                style="@style/SgSwitch"
+                android:text="@string/str_settings_only_clock" />
+        </LinearLayout>
+
+        <Button
+            android:id="@+id/btn_clear_log"
+            style="@style/SgButtonDestructive"
+            android:text="@string/str_settings_clear_log" />
+    </LinearLayout>
+</ScrollView>

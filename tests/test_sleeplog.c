@@ -263,6 +263,65 @@ static void test_log_early_dismiss_keeps_night(void) {
     }
 }
 
+/* v2: sg_log_open_bed_for = bed_ms of the open newest record whose wake_ms == T (T > 0). */
+static void test_log_open_bed_for(void) {
+    SgState s;
+    int64_t T = sg_at(20261009, 420);
+    int64_t bed = sg_at(20261008, 1380);
+    sg_tz_set(TZ_BA);
+    sg_state_defaults(&s);
+    SG_CHECK(sg_log_open_bed_for(&s, T) == 0);                      /* empty log */
+    SG_CHECK(sg_log_open_bed_for(NULL, T) == 0);
+    (void)sg_log_bed_tap(&s, bed, T);
+    SG_CHECK(sg_log_open_bed_for(&s, T) == bed);                    /* open, wake == T */
+    SG_CHECK(sg_log_open_bed_for(&s, T + SG_MIN_TO_MS(30)) == 0);   /* another alarm */
+    SG_CHECK(sg_log_open_bed_for(&s, 0) == 0);                      /* T = 0 never matches */
+    SG_CHECK(sg_log_close_if_due(&s, T) == 1);
+    SG_CHECK(sg_log_open_bed_for(&s, T) == 0);                      /* closed */
+    sg_state_defaults(&s);
+    (void)sg_log_bed_tap(&s, bed, 0);                               /* wake unknown */
+    SG_CHECK(sg_log_open_bed_for(&s, 0) == 0);
+    SG_CHECK(sg_log_open_bed_for(&s, T) == 0);
+}
+
+/* v2: sg_log_bed_retap = "Actualizar" (same night, bed moves forward, never appends);
+ * otherwise exactly the v1 sg_log_bed_tap. */
+static void test_log_bed_retap(void) {
+    SgState s;
+    int64_t bed = sg_at(20261008, 1380);                 /* 23:00 Thu */
+    int64_t T = sg_at(20261009, 420);
+    int64_t T2 = sg_at(20261009, 480);
+    sg_tz_set(TZ_BA);
+    sg_state_defaults(&s);
+    SG_CHECK(sg_log_bed_retap(NULL, bed, T) == 0);
+    SG_CHECK(sg_log_bed_retap(&s, 0, T) == 0);           /* now_ms <= 0 */
+    SG_CHECK(sg_log_bed_retap(&s, bed, T) == 1);         /* no record: append */
+    SG_CHECK(s.night_count == 1);
+    /* same night, 90 min later: updated, not appended (v1 dedup would append) */
+    SG_CHECK(sg_log_bed_retap(&s, bed + SG_MIN_TO_MS(90), T) == 2);
+    SG_CHECK(s.night_count == 1 && bed_at(&s, 0) == bed + SG_MIN_TO_MS(90));
+    /* an earlier time never moves bed_ms backwards */
+    SG_CHECK(sg_log_bed_retap(&s, bed + SG_MIN_TO_MS(10), T) == 0);
+    SG_CHECK(s.night_count == 1 && bed_at(&s, 0) == bed + SG_MIN_TO_MS(90));
+    SG_CHECK(sg_log_at(&s, 0)->wake_ms == T);
+    /* different alarm: v1 rule applies (inside 30 min -> update, wake follows) */
+    SG_CHECK(sg_log_bed_retap(&s, bed + SG_MIN_TO_MS(100), T2) == 2);
+    SG_CHECK(s.night_count == 1 && sg_log_at(&s, 0)->wake_ms == T2);
+    /* same night (now wake == T2), 200 min later: updated at any distance, never appended */
+    SG_CHECK(sg_log_bed_retap(&s, bed + SG_MIN_TO_MS(300), T2) == 2);
+    SG_CHECK(s.night_count == 1 && bed_at(&s, 0) == bed + SG_MIN_TO_MS(300));
+    /* a third alarm 200 min after the bed: no open night for it, v1 rule appends */
+    SG_CHECK(sg_log_bed_retap(&s, bed + SG_MIN_TO_MS(600), T2 + SG_MIN_TO_MS(30)) == 1);
+    SG_CHECK(s.night_count == 2);
+    /* closed record is never updated: a new one is appended */
+    sg_state_defaults(&s);
+    (void)sg_log_bed_tap(&s, bed, T);
+    SG_CHECK(sg_log_close_if_due(&s, T) == 1);
+    SG_CHECK(sg_log_bed_retap(&s, bed + SG_MIN_TO_MS(60), T) == 1);
+    SG_CHECK(s.night_count == 2 && sg_log_at(&s, 0)->closed == 1);
+    SG_CHECK(bed_at(&s, 0) == bed);
+}
+
 void run_sleeplog_tests(void) {
     SG_RUN(test_log_bed_tap_adds);
     SG_RUN(test_log_dedup_window);
@@ -279,4 +338,6 @@ void run_sleeplog_tests(void) {
     SG_RUN(test_ref_median_lower);
     SG_RUN(test_ref_cap_ten);
     SG_RUN(test_ref_clear);
+    SG_RUN(test_log_open_bed_for);
+    SG_RUN(test_log_bed_retap);
 }

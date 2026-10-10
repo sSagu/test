@@ -10,13 +10,15 @@ App personal para Android (sideload, sin Play Store) que lee tu **próxima alarm
 
 ## Qué hace
 
-- **F1 · Recordatorio principal** (activado): notificación 9h30 antes de tu alarma (ajustable de 8 h a 11 h, en pasos de 15 min). Muestra la hora de la alarma y a qué hora acostarte. Botones: **"Me voy a dormir"** y **"En 15 min"** (máximo 2 posposiciones).
+**Pantalla principal:** la hora de tu próxima alarma en grande, a qué hora te avisa la app, el botón **"Me voy a dormir"**, el gráfico de las últimas 7 noches y tu deuda de sueño de la semana. El engranaje de arriba a la derecha abre **Ajustes**, en su propia pantalla.
+
+- **F1 · Recordatorio principal** (activado): notificación 9h30 antes de tu alarma (ajustable de 8 h a 11 h, en pasos de 15 min). Muestra la hora de la alarma y a qué hora acostarte. Botones: **"Me voy a dormir"** y **"En 15 min"** (máximo 2 posposiciones). Si reiniciás el teléfono mientras el aviso sigue vigente, Android lo borra y la app lo vuelve a mostrar **en silencio**, con el tiempo que le quedaba.
 - **F2 · Aviso previo suave** (desactivado por defecto): una frase tipo "Bajá las luces y dejá las pantallas", 30 min antes del F1 (ajustable de 15 a 60 min).
 - **F3 · "Alarma cercana"** (activado): si ponés la alarma y ya quedó cerca del F1, te dice cuánto podés dormir si te acostás ya. Solo avisa si quedan **4 h o más**. Como máximo una vez cada 3 h.
-- **F4 · Registro de noches** (activado): tocás **"Me voy a dormir"** y la app guarda la hora de acostarte. Al despertar muestra las últimas 7 noches y tu **deuda de sueño semanal**, contando solo las noches registradas. Objetivo por defecto: **8 h** (rango 7 h a 9 h). Guarda 90 noches.
+- **F4 · Registro de noches** (activado): tocás **"Me voy a dormir"** (en el aviso o en la pantalla principal) y la app guarda la hora de acostarte. La pantalla principal muestra las últimas 7 noches en un gráfico y tu **deuda de sueño semanal**, contando solo las noches registradas. Objetivo por defecto: **8 h** (rango 7 h a 9 h). Guarda 90 noches.
 - **F5 · Sugerencias para el finde** (activado, silenciosas): si tu alarma del sábado o domingo es más de 90 min posterior a la de la semana, te sugiere una hora tope para levantarte. Si el viernes o sábado a las 21:30 no hay alarma, te sugiere una hora de levantarte.
 
-Ajustes generales: activar/desactivar todo, solo alarmas del Reloj (activado por defecto), borrar el registro.
+**Ajustes** (engranaje, pantalla propia): activar/desactivar todo, anticipación del aviso y horas de sueño objetivo (con − y +), aviso previo, alarma cercana, sugerencias para el finde, solo alarmas del Reloj (activado por defecto) y borrar el registro.
 
 ### Lo que NO hace (a propósito)
 
@@ -50,7 +52,7 @@ adb install -r build/sg.apk
 
 1. **Abrí la app una vez.** Es obligatorio: Android no ejecuta los receptores de una app que nunca se abrió, así que si no la abrís, no vas a recibir nada.
 2. **Permití notificaciones** cuando la app lo pida. Sin ese permiso no puede avisarte. Si lo rechazaste, aparece un banner con el botón para ir a los ajustes.
-3. **Verificá "Próxima alarma"** en la pantalla principal. Tiene que mostrar la misma hora que la app Reloj. Si dice "No tenés alarma puesta", revisá que la alarma exista y esté activada.
+3. **Verificá la pantalla principal.** La hora grande de "Próxima alarma" tiene que ser la misma que la de la app Reloj. Si dice "No tenés alarma puesta", revisá que la alarma exista y esté activada.
 4. **Poné la alarma en la app Reloj de Samsung como siempre.** La app la detecta sola.
 
 ---
@@ -76,11 +78,11 @@ Android y One UI pueden frenar la app en segundo plano y perderse el recordatori
 
 **Reglas que tenés que saber:**
 - La app mira solo la **próxima** alarma del Reloj. La usa si suena entre **04:00 y 12:00** (ambas incluidas) y faltan **36 h o menos**.
-- Una alarma fuera de esa franja aparece igual como "Próxima alarma: HH:MM", pero con "Sin recordatorio programado". Revisá que sea a. m. (04:00 y no 16:00).
-- El aviso sale a la hora de la alarma menos "Avisarme antes de la alarma" (9 h 30 min de fábrica, se cambia con − y + de 8 h a 11 h). La pantalla muestra solo la hora, sin el día.
-- Si dice "Hay una alarma de otra app (HH:MM). No la tengo en cuenta.", desactivá "Solo alarmas del Reloj".
+- Una alarma fuera de esa franja aparece igual con su hora, pero la pantalla dice "Tu próxima alarma es a las HH:MM" y "Solo te aviso para alarmas entre las 04:00 y las 12:00". Revisá que sea a. m. (04:00 y no 16:00).
+- El aviso sale a la hora de la alarma menos "Avisarme antes de la alarma" (9 h 30 min de fábrica, de 8 h a 11 h). Se cambia en **Ajustes** (engranaje arriba a la derecha) con − y +. La pantalla muestra solo la hora, sin el día.
+- Si dice "Hay una alarma de otra app a las HH:MM. Solo tengo en cuenta las alarmas del Reloj.", desactivá "Solo alarmas del Reloj" en **Ajustes**.
 
-**Comprobación instantánea (a cualquier hora):** poné tu alarma real y abrí la app. Ejemplo: alarma a las 08:00 → "Próxima alarma: 08:00" y "Próximo recordatorio: 22:30".
+**Comprobación instantánea (a cualquier hora):** poné tu alarma real y abrí la app. Ejemplo: alarma a las 08:00 → "Próxima alarma" con 08:00 y "Te aviso para prepararte a las 22:30".
 
 **Prueba real del aviso.** Elegí la fila según la hora actual. Ponés la alarma de prueba en el Reloj y después volvés a la app:
 
@@ -93,21 +95,22 @@ Android y One UI pueden frenar la app en segundo plano y perderse el recordatori
 
 (Entre las 03:55 y las 04:00 esperá unos minutos y usá la primera fila.)
 
-- "Próximo recordatorio:" tiene que mostrar la hora de la última columna. Si tardás hasta 30 min en poner la alarma, el aviso sale enseguida.
+- "Te aviso para prepararte a las" tiene que mostrar la hora de la última columna. Si tardás hasta 30 min en poner la alarma, el aviso sale enseguida.
 - Llega "Es hora de ir preparándote para dormir" con "Alarma a las HH:MM. Para dormir 8 h 00 min, acostate a las (alarma − 8 h 20 min)." Con anticipación de 8 h el texto es "Alarma a las HH:MM. Si te acostás ahora, podés dormir 7 h 30 min.".
-- Tocá los botones, **no el cuerpo** del aviso: tocar el cuerpo abre la app y borra el aviso con sus botones.
+- Tocá los botones del aviso. Si tocás el cuerpo, se abre la app y el aviso desaparece, pero en la pantalla principal sigue el botón **"Me voy a dormir"** (ver la prueba de abajo).
   1. **En 15 min:** el aviso desaparece y vuelve 15 min después del toque. Funciona 2 veces; a la segunda vuelta ya no está el botón.
-  2. **Me voy a dormir:** cierra el aviso y anota la noche bajo el día de la alarma. Si tocás antes de las 00:00, la noche aparece recién después de medianoche.
+  2. **Me voy a dormir:** cierra el aviso y anota la noche bajo el día de la alarma. Si tocás antes de las 00:00, la noche aparece en el gráfico recién después de medianoche.
+- **Registro sin notificación:** deslizá el aviso para descartarlo, abrí la app y tocá **"Me voy a dormir"**. El botón está disponible desde 2 h antes del aviso hasta 1 h antes de la alarma (antes dice "Disponible desde las HH:MM"). Tiene que aparecer "Anotado: te acostaste a las HH:MM" y la noche en el gráfico al día siguiente de la alarma, como arriba.
 - (Opcional) Aviso de alarma cercana: con la anticipación de fábrica, poné una alarma que suene dentro de 4 h 22 min a 9 h (siempre entre 04:00 y 12:00). Unos 90 s después llega "Tu alarma quedó cerca". No aparece si hubo otro aviso en las últimas 3 h.
 
 **Limpieza (siempre):**
 1. Volvé la anticipación a "9 h 30 min antes (rango 8 h a 11 h)".
 2. Borrá la alarma de prueba en el Reloj. Si queda, suena de verdad y tapa tu alarma real.
-3. Ajustes → "Borrar registro de noches" → **Borrar**.
-4. Abrí la app: con tu alarma real tiene que decir "Próximo recordatorio: (alarma − 9 h 30)". Si la alarma está a más de 36 h (por ejemplo, el lunes visto desde el viernes), dice "Sin recordatorio programado" hasta que falten 36 h. Es normal.
+3. Engranaje → Ajustes → "Borrar registro de noches" → **Borrar**.
+4. Abrí la app: con tu alarma real, "Te aviso para prepararte a las" tiene que mostrar (alarma − 9 h 30). Si la alarma está a más de 36 h (por ejemplo, el lunes visto desde el viernes), dice "Cuando falte menos de un día y medio, acá vas a ver a qué hora te aviso." hasta que falten 36 h. Es normal.
 
 **Esto no es una falla:**
-- Después de que salió el aviso, la app dice "Sin recordatorio programado".
+- Después de que salió el aviso, la app dice "Aviso enviado a las HH:MM".
 - Con No molestar o con el modo Dormir de Samsung activo, el aviso llega sin sonido. Agregá Sueño-Guía como excepción del modo o mirá el panel de notificaciones.
 
 ---
@@ -175,6 +178,6 @@ Lo construyó un enjambre de modelos de IA coordinado por Claude: un asesor de a
 - **Las horas pueden atrasarse.** Si Android no permite alarmas exactas, el aviso puede llegar hasta 10 a 15 min tarde.
 - **Las alarmas con posponer** pueden hacer que la app tome la hora de la posposición. Es un caso que la app contempla, pero conviene verlo en la prueba.
 - **Hay que abrir la app después de un corte.** Si Android cierra la app a la fuerza, no corre nada hasta que la abras de nuevo.
-- **Si reiniciás el teléfono después de que llegó el aviso y antes de tocar "Me voy a dormir", el aviso no vuelve** y esa noche no queda registrada (Android borra las notificaciones al reiniciar). El aviso de la noche siguiente funciona normal.
+- **Si reiniciás el teléfono**, Android borra las notificaciones. La app vuelve a mostrar el aviso en silencio solo si seguís dentro de la ventana del botón y no pasaron 3 h desde que llegó. Si no, el aviso no vuelve: podés anotar la noche desde la pantalla principal con "Me voy a dormir", mientras esté disponible.
 - **No está probada en un teléfono físico** (no había uno disponible al construirla). El núcleo en C sí está probado en la PC: tests unitarios con ASan/UBSan en 3 zonas horarias, valgrind sin leaks, clang-tidy y cppcheck limpios, y dos auditorías (Android y núcleo). **La primera noche, revisá que el aviso llegue.**
 - **Mide oportunidad, no sueño.** El número de "sueño" es una estimación (tiempo en cama menos 20 min). No es un dato médico.

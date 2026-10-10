@@ -311,6 +311,12 @@ static void maybe_repost_f1(SgState *s, const SgObs *o, int reason, int64_t T, i
     if (since < 0 || since >= min_ms(SG_F1_TIMEOUT_MIN)) {
         return;
     }
+    if (!has_flag(s, SG_FLAG_F1_POSTED)) {
+        /* Snooze pending: keep it an audible snooze. A reboot lost its alarm; after an
+         * update this replaces it (same request code). fire_f1 re-posts normally. */
+        sg_cmd_schedule(out, SG_ALARM_F1, now + min_ms(SG_SNOOZE_MIN), SG_SCHED_EXACT_IDLE);
+        return;
+    }
     timeout = SG_F1_TIMEOUT_MIN - (int32_t)(since / SG_MS_PER_MIN);
     if (timeout < 1) {
         timeout = 1;
@@ -473,9 +479,16 @@ int sg_core_sync(SgState *s, const SgObs *o, int reason, SgCmdList *out)
                     }
                 }
                 sched_f2_or_cancel(s, f1, now, T, out);
-                maybe_repost_f1(s, o, reason, T, f1, out);
+                maybe_repost_f1(s, o, s->boot_unseen ? SG_REASON_BOOT : reason, T, f1, out);
             }
         }
+        /* Rule R owed by an earlier BOOT/PKG_REPLACED is settled by this OK sync. */
+        s->boot_unseen = 0;
+    } else if ((reason == SG_REASON_BOOT || reason == SG_REASON_PKG_REPLACED) &&
+               o->next_alarm_ms == 0 && s->last_seen_T != 0) {
+        /* Alarm list not rebuilt yet after boot: keep T's state; the broadcast that follows
+         * applies rule R (ADVICE-v2 section 4). */
+        s->boot_unseen = 1;
     } else {
         /* No relevant alarm: cancel F1/F2/F5 hint and their notifications. */
         if (s->last_seen_T != 0) {
@@ -750,6 +763,8 @@ int sg_core_action(SgState *s, const SgObs *o, int action_id, SgCmdList *out)
             lo = f1_of(s, T) - min_ms(SG_BED_WINDOW_BEFORE_MIN);
             hi = T - min_ms(SG_BED_WINDOW_AFTER_MIN);
             if (now >= lo && now <= hi) {
+                int f1_unsent = (s->last_f1_for_T != T);
+                int32_t delta = 0;
                 int r = sg_log_bed_retap(s, now, T);
 
                 if (r == 1) {
@@ -768,6 +783,12 @@ int sg_core_action(SgState *s, const SgObs *o, int action_id, SgCmdList *out)
                 sg_cmd_cancel_notify(out, SG_NK_F2);
                 sg_cmd_cancel_notify(out, SG_NK_F3);
                 put_flag(s, SG_FLAG_F1_POSTED, 0);
+                /* F1 will never fire for T now: keep the weekend hint it would have armed. */
+                if (f1_unsent && has_flag(s, SG_FLAG_JETLAG_ON) && s->last_f5_for_T != T &&
+                    weekend_drift(s, T, &delta)) {
+                    sg_cmd_schedule(out, SG_ALARM_F5_HINT, now + SG_F5_AFTER_F1_MIN * SG_MS_PER_MIN,
+                                    SG_SCHED_EXACT_IDLE);
+                }
                 return SG_OK;
             }
         }

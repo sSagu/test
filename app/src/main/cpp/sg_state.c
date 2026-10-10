@@ -69,6 +69,7 @@ void sg_state_defaults(SgState *s)
     s->debounce_due_ms = 0;
     s->debounce_T = 0;
     s->last_f5_date = 0;
+    s->boot_unseen = 0;
 
     clear_nights(s);
     clear_refs(s);

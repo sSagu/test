@@ -49,7 +49,11 @@
         <item name="android:layout_marginTop">@dimen/sg_gap</item>
         <item name="android:orientation">vertical</item>
         <item name="android:background">@drawable/bg_card</item>
-        <item name="android:padding">@dimen/sg_card_pad</item>
+        <!-- per side: android:padding would override paddingTop/Bottom set on the same view (D1) -->
+        <item name="android:paddingStart">@dimen/sg_card_pad</item>
+        <item name="android:paddingEnd">@dimen/sg_card_pad</item>
+        <item name="android:paddingTop">@dimen/sg_card_pad</item>
+        <item name="android:paddingBottom">@dimen/sg_card_pad</item>
     </style>
 
     <!-- Settings card: padding 8 dp vertical, 20 dp horizontal. -->
@@ -157,6 +161,7 @@
     </style>
     <!-- value label over the latest bar: 12 sp medium primary, tabular -->
     <style name="SgText.ChartValue">
+        <item name="android:background">@color/sg_card</item>
         <item name="android:textSize">@dimen/sg_ts_chart</item>
         <item name="android:textFontWeight">500</item>
         <item name="android:fontFeatureSettings">tnum</item>
@@ -211,6 +216,8 @@
         <item name="android:textSize">@dimen/sg_ts_row_value</item>
         <item name="android:textFontWeight">500</item>
         <item name="android:fontFeatureSettings">tnum</item>
+        <!-- a new value after +/- is announced (WCAG 4.1.3) -->
+        <item name="android:accessibilityLiveRegion">polite</item>
     </style>
 
     <!-- ===== buttons and controls ===== -->

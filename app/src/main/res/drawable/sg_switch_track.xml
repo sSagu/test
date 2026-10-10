@@ -1,11 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- android.widget.Switch track: 52x32, radius 16; accent when on, #3A3A42 when off. -->
+<!-- android.widget.Switch track: 52x32, radius 16, 4 dp horizontal padding (thumb travel);
+     accent when on, #3A3A42 when off. -->
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:state_checked="true">
         <shape android:shape="rectangle">
             <solid android:color="@color/sg_accent" />
             <corners android:radius="16dp" />
             <size android:width="52dp" android:height="32dp" />
+            <padding android:left="4dp" android:right="4dp" />
         </shape>
     </item>
     <item>
@@ -13,6 +15,7 @@
             <solid android:color="@color/sg_switch_off" />
             <corners android:radius="16dp" />
             <size android:width="52dp" android:height="32dp" />
+            <padding android:left="4dp" android:right="4dp" />
         </shape>
     </item>
 </selector>

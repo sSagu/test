@@ -1,253 +1,670 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Root ScrollView; side padding and system-bar insets are applied in MainActivity. -->
+<!-- Main screen (docs/design/main-screen.dc.html, docs/ADVICE-v2.md section 5 table 1).
+     Every visibility and every text that depends on state is set in MainActivity.bind() from
+     the C view model. Static texts come from @string only. Owner: ui-main. -->
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/sg_black"
+    android:background="@color/sg_ground"
+    android:clipToPadding="false"
     android:fillViewport="true">
 
     <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:paddingStart="@dimen/sg_gutter"
-        android:paddingEnd="@dimen/sg_gutter"
-        android:paddingTop="@dimen/sg_space_row"
-        android:paddingBottom="@dimen/sg_space_section">
+        style="@style/SgScreenColumn">
 
-        <TextView
-            android:id="@+id/txt_screen_title"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="@string/str_screen_title"
-            android:textColor="@color/sg_text"
-            android:textSize="@dimen/sg_text_big"
-            android:textStyle="bold" />
+        <!-- top bar: title and settings gear -->
+        <LinearLayout
+            style="@style/SgTopBar">
 
+            <TextView
+                android:id="@+id/txt_screen_title"
+                style="@style/SgText.Title"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/str_screen_title" />
+
+            <ImageButton
+                android:id="@+id/btn_settings"
+                style="@style/SgIconButton"
+                android:contentDescription="@string/str_cd_settings"
+                android:src="@drawable/ic_gear" />
+        </LinearLayout>
+
+        <!-- generic error line: shown only when the UI model is missing -->
         <TextView
             android:id="@+id/txt_error"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="@dimen/sg_space_row"
+            style="@style/SgText"
+            android:layout_marginTop="@dimen/sg_gap"
             android:text="@string/str_error_generic"
-            android:textColor="@color/sg_text"
-            android:textSize="@dimen/sg_text_body"
             android:visibility="gone" />
 
-        <!-- Notification-permission banner -->
+        <!-- notification permission banner (UI_NOTIF_BANNER) -->
         <LinearLayout
             android:id="@+id/box_notif_banner"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="@dimen/sg_space_row"
-            android:orientation="vertical"
+            style="@style/SgCard"
             android:visibility="gone">
 
             <TextView
                 android:id="@+id/txt_notif_banner"
+                style="@style/SgText"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="@string/str_perm_notif_banner"
-                android:textColor="@color/sg_text"
-                android:textSize="@dimen/sg_text_body" />
+                android:text="@string/str_perm_notif_banner" />
 
             <Button
                 android:id="@+id/btn_notif_settings"
-                android:layout_width="wrap_content"
-                android:layout_height="@dimen/sg_touch_min"
-                android:minHeight="@dimen/sg_touch_min"
-                android:minWidth="@dimen/sg_touch_min"
-                android:text="@string/str_perm_notif_open_settings"
-                android:textColor="@color/sg_accent" />
+                style="@style/SgButtonOutline"
+                android:layout_marginTop="12dp"
+                android:text="@string/str_perm_notif_open_settings" />
         </LinearLayout>
 
-        <!-- Next alarm and reminder -->
-        <TextView
-            android:id="@+id/txt_next_alarm"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="@dimen/sg_space_section"
-            android:textColor="@color/sg_text"
-            android:textSize="@dimen/sg_text_title" />
+        <!-- hero card when HERO == ALARM -->
+        <LinearLayout
+            android:id="@+id/box_hero_alarm"
+            style="@style/SgCard">
 
-        <TextView
-            android:id="@+id/txt_next_reminder"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="@dimen/sg_space_row"
-            android:textColor="@color/sg_text"
-            android:textSize="@dimen/sg_text_body" />
-
-        <!-- Last 7 nights -->
-        <TextView
-            android:id="@+id/txt_last_nights_title"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="@dimen/sg_space_section"
-            android:text="@string/str_screen_last_nights"
-            android:textColor="@color/sg_text_dim"
-            android:textSize="@dimen/sg_text_small" />
-
-        <TextView android:id="@+id/night_0" style="@style/SgNightRow" />
-        <TextView android:id="@+id/night_1" style="@style/SgNightRow" />
-        <TextView android:id="@+id/night_2" style="@style/SgNightRow" />
-        <TextView android:id="@+id/night_3" style="@style/SgNightRow" />
-        <TextView android:id="@+id/night_4" style="@style/SgNightRow" />
-        <TextView android:id="@+id/night_5" style="@style/SgNightRow" />
-        <TextView android:id="@+id/night_6" style="@style/SgNightRow" />
-
-        <!-- Weekly debt -->
-        <TextView
-            android:id="@+id/txt_debt_title"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="@dimen/sg_space_section"
-            android:text="@string/str_screen_debt_title"
-            android:textColor="@color/sg_text_dim"
-            android:textSize="@dimen/sg_text_small" />
-
-        <TextView
-            android:id="@+id/txt_debt_value"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="@dimen/sg_space_row"
-            android:textColor="@color/sg_text"
-            android:textSize="@dimen/sg_text_title" />
-
-        <!-- Social jetlag line -->
-        <TextView
-            android:id="@+id/txt_jetlag"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="@dimen/sg_space_section"
-            android:textColor="@color/sg_text"
-            android:textSize="@dimen/sg_text_body"
-            android:visibility="gone" />
-
-        <TextView
-            android:id="@+id/txt_disclaimer"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="@dimen/sg_space_section"
-            android:text="@string/str_screen_disclaimer"
-            android:textColor="@color/sg_text_dim"
-            android:textSize="@dimen/sg_text_small" />
-
-        <!-- Settings -->
-        <TextView
-            android:id="@+id/txt_settings_title"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="@dimen/sg_space_section"
-            android:text="@string/str_settings_title"
-            android:textColor="@color/sg_text"
-            android:textSize="@dimen/sg_text_title"
-            android:textStyle="bold" />
-
-        <Switch
-            android:id="@+id/sw_enabled"
-            style="@style/SgSwitch"
-            android:text="@string/str_settings_enabled" />
-
-        <!-- Lead: stepper -->
-        <LinearLayout style="@style/SgStepRow">
             <TextView
-                android:id="@+id/txt_lead_label"
+                android:id="@+id/txt_alarm_day"
+                style="@style/SgText.Label"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+
+            <TextView
+                android:id="@+id/txt_alarm_time"
+                style="@style/SgText.AlarmTime"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp" />
+
+            <View
+                style="@style/SgDivider"
+                android:layout_marginTop="@dimen/sg_gap" />
+
+            <LinearLayout
+                android:id="@+id/row_remind"
+                style="@style/SgHeroRow">
+
+                <ImageView
+                    style="@style/SgHeroRowIcon"
+                    android:src="@drawable/ic_bell" />
+
+                <TextView
+                    android:id="@+id/txt_remind_label"
+                    style="@style/SgText.Row"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1" />
+
+                <TextView
+                    android:id="@+id/txt_remind_time"
+                    style="@style/SgText.RowValue"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/row_bed_suggest"
+                style="@style/SgHeroRow">
+
+                <ImageView
+                    style="@style/SgHeroRowIcon"
+                    android:src="@drawable/ic_moon_outline" />
+
+                <TextView
+                    android:id="@+id/txt_bed_suggest_label"
+                    style="@style/SgText.Row"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1" />
+
+                <TextView
+                    android:id="@+id/txt_bed_suggest_time"
+                    style="@style/SgText.RowValue"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- message card when HERO != ALARM (no alarm, other app, out of window, far, disabled) -->
+        <LinearLayout
+            android:id="@+id/box_hero_msg"
+            style="@style/SgCard"
+            android:paddingTop="24dp"
+            android:paddingBottom="24dp">
+
+            <TextView
+                android:id="@+id/txt_hero_msg_title"
+                style="@style/SgText.HeroMsgTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+
+            <TextView
+                android:id="@+id/txt_hero_msg_body"
+                style="@style/SgText.HeroMsgBody"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp" />
+        </LinearLayout>
+
+        <!-- "Me voy a dormir" control: BED_STATE 1, 2 and 4 -->
+        <LinearLayout
+            android:id="@+id/box_bed"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/sg_gap"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:id="@+id/btn_bed"
+                style="@style/SgBedButton">
+
+                <ImageView
+                    android:id="@+id/img_bed_moon"
+                    style="@style/SgBedButtonIcon" />
+
+                <TextView
+                    android:id="@+id/txt_bed_button"
+                    style="@style/SgBedButtonText"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/str_bed_button" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/txt_bed_hint"
+                style="@style/SgText.Hint"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp" />
+        </LinearLayout>
+
+        <!-- logged card: BED_STATE 3 -->
+        <LinearLayout
+            android:id="@+id/box_bed_logged"
+            style="@style/SgCard"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingStart="20dp"
+            android:paddingTop="16dp"
+            android:paddingEnd="16dp"
+            android:paddingBottom="16dp"
+            android:visibility="gone">
+
+            <ImageView
+                android:id="@+id/img_bed_check"
+                android:layout_width="@dimen/sg_badge"
+                android:layout_height="@dimen/sg_badge"
+                android:background="@drawable/bg_check_badge"
+                android:importantForAccessibility="no"
+                android:scaleType="center"
+                android:src="@drawable/ic_check"
+                android:tint="@color/sg_on_accent" />
+
+            <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
+                android:layout_marginStart="14dp"
                 android:layout_weight="1"
-                android:text="@string/str_settings_lead"
-                android:textColor="@color/sg_text"
-                android:textSize="@dimen/sg_text_body" />
-            <Button android:id="@+id/btn_lead_minus" style="@style/SgStepButton" android:text="−" />
-            <TextView
-                android:id="@+id/txt_lead_value"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:minWidth="@dimen/sg_touch_min"
-                android:gravity="center"
-                android:textColor="@color/sg_text"
-                android:textSize="@dimen/sg_text_body" />
-            <Button android:id="@+id/btn_lead_plus" style="@style/SgStepButton" android:text="+" />
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/txt_bed_logged"
+                    style="@style/SgText.Logged"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:accessibilityLiveRegion="polite" />
+
+                <TextView
+                    android:id="@+id/txt_bed_logged_sub"
+                    style="@style/SgText.Small"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp" />
+            </LinearLayout>
+
+            <Button
+                android:id="@+id/btn_bed_update"
+                style="@style/SgButtonOutline"
+                android:contentDescription="@string/str_cd_bed_update"
+                android:text="@string/str_bed_update"
+                android:visibility="gone" />
         </LinearLayout>
 
-        <!-- Target sleep: stepper -->
-        <LinearLayout style="@style/SgStepRow">
-            <TextView
-                android:id="@+id/txt_target_label"
-                android:layout_width="0dp"
+        <!-- last 7 nights and weekly debt -->
+        <LinearLayout
+            android:id="@+id/box_week"
+            style="@style/SgCard"
+            android:clipChildren="false">
+
+            <LinearLayout
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="@string/str_settings_target"
-                android:textColor="@color/sg_text"
-                android:textSize="@dimen/sg_text_body" />
-            <Button android:id="@+id/btn_target_minus" style="@style/SgStepButton" android:text="−" />
-            <TextView
-                android:id="@+id/txt_target_value"
-                android:layout_width="wrap_content"
+                android:orientation="horizontal"
+                android:baselineAligned="true">
+
+                <TextView
+                    android:id="@+id/txt_week_title"
+                    style="@style/SgText.Section"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/str_screen_last_nights" />
+
+                <TextView
+                    android:id="@+id/txt_week_unit"
+                    style="@style/SgText.Small"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/str_week_unit" />
+            </LinearLayout>
+
+            <FrameLayout
+                android:id="@+id/chart"
+                android:layout_width="match_parent"
+                android:layout_height="@dimen/sg_chart_h"
+                android:layout_marginTop="14dp"
+                android:clipChildren="false">
+
+                <!-- dashed 8 h target line; bottomMargin set from TARGET_PERMILLE in Java -->
+                <View
+                    android:id="@+id/chart_target_line"
+                    android:layout_width="match_parent"
+                    android:layout_height="@dimen/sg_target_line_h"
+                    android:layout_gravity="bottom"
+                    android:background="@drawable/line_dashed"
+                    android:layerType="software" />
+
+                <View
+                    android:id="@+id/chart_baseline"
+                    android:layout_width="match_parent"
+                    android:layout_height="@dimen/sg_baseline_h"
+                    android:layout_gravity="bottom"
+                    android:background="@color/sg_baseline" />
+
+                <!-- "objetivo 8 h": drawn UNDER the columns (declared before chart_cols, no background)
+                     so it can never hide a bar or the newest value label (UI-1, UI2-A1). bottomMargin =
+                     line margin + 4 dp, set in Java. -->
+                <TextView
+                    android:id="@+id/txt_target_label"
+                    style="@style/SgText.Chart"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="bottom|start"
+                    android:paddingEnd="4dp" />
+
+                <LinearLayout
+                    android:id="@+id/chart_cols"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:clipChildren="false"
+                    android:orientation="horizontal"
+                    android:paddingBottom="1dp">
+
+                    <LinearLayout
+                        android:id="@+id/col_0"
+                        android:layout_width="0dp"
+                        android:layout_height="match_parent"
+                        android:layout_weight="1"
+                        android:orientation="vertical"
+                        android:gravity="bottom|center_horizontal"
+                        android:focusable="true"
+                        android:importantForAccessibility="yes"
+                        android:layout_marginEnd="@dimen/sg_bar_gap"
+                        android:clipChildren="false">
+
+                        <TextView
+                            android:id="@+id/lbl_0"
+                            style="@style/SgText.ChartValue"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginBottom="@dimen/sg_bar_label_gap"
+                            android:visibility="gone" />
+
+                        <View
+                            android:id="@+id/bar_0"
+                            android:layout_width="@dimen/sg_bar_w"
+                            android:layout_height="0dp"
+                            android:background="@drawable/bg_bar"
+                            android:visibility="gone" />
+
+                        <View
+                            android:id="@+id/dash_0"
+                            android:layout_width="@dimen/sg_empty_w"
+                            android:layout_height="@dimen/sg_empty_h"
+                            android:layout_marginBottom="2dp"
+                            android:background="@drawable/bg_bar_empty" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:id="@+id/col_1"
+                        android:layout_width="0dp"
+                        android:layout_height="match_parent"
+                        android:layout_weight="1"
+                        android:orientation="vertical"
+                        android:gravity="bottom|center_horizontal"
+                        android:focusable="true"
+                        android:importantForAccessibility="yes"
+                        android:layout_marginEnd="@dimen/sg_bar_gap"
+                        android:clipChildren="false">
+
+                        <TextView
+                            android:id="@+id/lbl_1"
+                            style="@style/SgText.ChartValue"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginBottom="@dimen/sg_bar_label_gap"
+                            android:visibility="gone" />
+
+                        <View
+                            android:id="@+id/bar_1"
+                            android:layout_width="@dimen/sg_bar_w"
+                            android:layout_height="0dp"
+                            android:background="@drawable/bg_bar"
+                            android:visibility="gone" />
+
+                        <View
+                            android:id="@+id/dash_1"
+                            android:layout_width="@dimen/sg_empty_w"
+                            android:layout_height="@dimen/sg_empty_h"
+                            android:layout_marginBottom="2dp"
+                            android:background="@drawable/bg_bar_empty" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:id="@+id/col_2"
+                        android:layout_width="0dp"
+                        android:layout_height="match_parent"
+                        android:layout_weight="1"
+                        android:orientation="vertical"
+                        android:gravity="bottom|center_horizontal"
+                        android:focusable="true"
+                        android:importantForAccessibility="yes"
+                        android:layout_marginEnd="@dimen/sg_bar_gap"
+                        android:clipChildren="false">
+
+                        <TextView
+                            android:id="@+id/lbl_2"
+                            style="@style/SgText.ChartValue"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginBottom="@dimen/sg_bar_label_gap"
+                            android:visibility="gone" />
+
+                        <View
+                            android:id="@+id/bar_2"
+                            android:layout_width="@dimen/sg_bar_w"
+                            android:layout_height="0dp"
+                            android:background="@drawable/bg_bar"
+                            android:visibility="gone" />
+
+                        <View
+                            android:id="@+id/dash_2"
+                            android:layout_width="@dimen/sg_empty_w"
+                            android:layout_height="@dimen/sg_empty_h"
+                            android:layout_marginBottom="2dp"
+                            android:background="@drawable/bg_bar_empty" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:id="@+id/col_3"
+                        android:layout_width="0dp"
+                        android:layout_height="match_parent"
+                        android:layout_weight="1"
+                        android:orientation="vertical"
+                        android:gravity="bottom|center_horizontal"
+                        android:focusable="true"
+                        android:importantForAccessibility="yes"
+                        android:layout_marginEnd="@dimen/sg_bar_gap"
+                        android:clipChildren="false">
+
+                        <TextView
+                            android:id="@+id/lbl_3"
+                            style="@style/SgText.ChartValue"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginBottom="@dimen/sg_bar_label_gap"
+                            android:visibility="gone" />
+
+                        <View
+                            android:id="@+id/bar_3"
+                            android:layout_width="@dimen/sg_bar_w"
+                            android:layout_height="0dp"
+                            android:background="@drawable/bg_bar"
+                            android:visibility="gone" />
+
+                        <View
+                            android:id="@+id/dash_3"
+                            android:layout_width="@dimen/sg_empty_w"
+                            android:layout_height="@dimen/sg_empty_h"
+                            android:layout_marginBottom="2dp"
+                            android:background="@drawable/bg_bar_empty" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:id="@+id/col_4"
+                        android:layout_width="0dp"
+                        android:layout_height="match_parent"
+                        android:layout_weight="1"
+                        android:orientation="vertical"
+                        android:gravity="bottom|center_horizontal"
+                        android:focusable="true"
+                        android:importantForAccessibility="yes"
+                        android:layout_marginEnd="@dimen/sg_bar_gap"
+                        android:clipChildren="false">
+
+                        <TextView
+                            android:id="@+id/lbl_4"
+                            style="@style/SgText.ChartValue"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginBottom="@dimen/sg_bar_label_gap"
+                            android:visibility="gone" />
+
+                        <View
+                            android:id="@+id/bar_4"
+                            android:layout_width="@dimen/sg_bar_w"
+                            android:layout_height="0dp"
+                            android:background="@drawable/bg_bar"
+                            android:visibility="gone" />
+
+                        <View
+                            android:id="@+id/dash_4"
+                            android:layout_width="@dimen/sg_empty_w"
+                            android:layout_height="@dimen/sg_empty_h"
+                            android:layout_marginBottom="2dp"
+                            android:background="@drawable/bg_bar_empty" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:id="@+id/col_5"
+                        android:layout_width="0dp"
+                        android:layout_height="match_parent"
+                        android:layout_weight="1"
+                        android:orientation="vertical"
+                        android:gravity="bottom|center_horizontal"
+                        android:focusable="true"
+                        android:importantForAccessibility="yes"
+                        android:layout_marginEnd="@dimen/sg_bar_gap"
+                        android:clipChildren="false">
+
+                        <TextView
+                            android:id="@+id/lbl_5"
+                            style="@style/SgText.ChartValue"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginBottom="@dimen/sg_bar_label_gap"
+                            android:visibility="gone" />
+
+                        <View
+                            android:id="@+id/bar_5"
+                            android:layout_width="@dimen/sg_bar_w"
+                            android:layout_height="0dp"
+                            android:background="@drawable/bg_bar"
+                            android:visibility="gone" />
+
+                        <View
+                            android:id="@+id/dash_5"
+                            android:layout_width="@dimen/sg_empty_w"
+                            android:layout_height="@dimen/sg_empty_h"
+                            android:layout_marginBottom="2dp"
+                            android:background="@drawable/bg_bar_empty" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:id="@+id/col_6"
+                        android:layout_width="0dp"
+                        android:layout_height="match_parent"
+                        android:layout_weight="1"
+                        android:orientation="vertical"
+                        android:gravity="bottom|center_horizontal"
+                        android:focusable="true"
+                        android:importantForAccessibility="yes"
+                        android:clipChildren="false">
+
+                        <TextView
+                            android:id="@+id/lbl_6"
+                            style="@style/SgText.ChartValue"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginBottom="@dimen/sg_bar_label_gap"
+                            android:visibility="gone" />
+
+                        <View
+                            android:id="@+id/bar_6"
+                            android:layout_width="@dimen/sg_bar_w"
+                            android:layout_height="0dp"
+                            android:background="@drawable/bg_bar"
+                            android:visibility="gone" />
+
+                        <View
+                            android:id="@+id/dash_6"
+                            android:layout_width="@dimen/sg_empty_w"
+                            android:layout_height="@dimen/sg_empty_h"
+                            android:layout_marginBottom="2dp"
+                            android:background="@drawable/bg_bar_empty" />
+                    </LinearLayout>
+                </LinearLayout>
+
+            </FrameLayout>
+
+            <!-- weekday letters under the columns -->
+            <LinearLayout
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:minWidth="@dimen/sg_touch_min"
-                android:gravity="center"
-                android:textColor="@color/sg_text"
-                android:textSize="@dimen/sg_text_body" />
-            <Button android:id="@+id/btn_target_plus" style="@style/SgStepButton" android:text="+" />
+                android:layout_marginTop="8dp"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/day_0"
+                    style="@style/SgText.Chart"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:gravity="center_horizontal"
+                    android:layout_marginEnd="@dimen/sg_bar_gap" />
+
+                <TextView
+                    android:id="@+id/day_1"
+                    style="@style/SgText.Chart"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:gravity="center_horizontal"
+                    android:layout_marginEnd="@dimen/sg_bar_gap" />
+
+                <TextView
+                    android:id="@+id/day_2"
+                    style="@style/SgText.Chart"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:gravity="center_horizontal"
+                    android:layout_marginEnd="@dimen/sg_bar_gap" />
+
+                <TextView
+                    android:id="@+id/day_3"
+                    style="@style/SgText.Chart"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:gravity="center_horizontal"
+                    android:layout_marginEnd="@dimen/sg_bar_gap" />
+
+                <TextView
+                    android:id="@+id/day_4"
+                    style="@style/SgText.Chart"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:gravity="center_horizontal"
+                    android:layout_marginEnd="@dimen/sg_bar_gap" />
+
+                <TextView
+                    android:id="@+id/day_5"
+                    style="@style/SgText.Chart"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:gravity="center_horizontal"
+                    android:layout_marginEnd="@dimen/sg_bar_gap" />
+
+                <TextView
+                    android:id="@+id/day_6"
+                    style="@style/SgText.Chart"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:gravity="center_horizontal"
+                    android:textColor="@color/sg_text_primary" />
+            </LinearLayout>
+
+            <View
+                style="@style/SgDivider"
+                android:layout_marginTop="14dp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:id="@+id/txt_debt_title"
+                        style="@style/SgText.Row"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/str_screen_debt_title" />
+
+                    <TextView
+                        android:id="@+id/txt_debt_sub"
+                        style="@style/SgText.Small"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/txt_debt_value"
+                    style="@style/SgText.Debt"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="12dp" />
+            </LinearLayout>
         </LinearLayout>
 
-        <Switch
-            android:id="@+id/sw_winddown"
-            style="@style/SgSwitch"
-            android:text="@string/str_settings_winddown" />
-
-        <!-- Wind-down anticipation: stepper -->
-        <LinearLayout style="@style/SgStepRow">
-            <TextView
-                android:id="@+id/txt_winddown_label"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="@string/str_settings_winddown_min"
-                android:textColor="@color/sg_text"
-                android:textSize="@dimen/sg_text_body" />
-            <Button android:id="@+id/btn_winddown_minus" style="@style/SgStepButton" android:text="−" />
-            <TextView
-                android:id="@+id/txt_winddown_value"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:minWidth="@dimen/sg_touch_min"
-                android:gravity="center"
-                android:textColor="@color/sg_text"
-                android:textSize="@dimen/sg_text_body" />
-            <Button android:id="@+id/btn_winddown_plus" style="@style/SgStepButton" android:text="+" />
-        </LinearLayout>
-
-        <Switch
-            android:id="@+id/sw_late"
-            style="@style/SgSwitch"
-            android:text="@string/str_settings_late" />
-
-        <Switch
-            android:id="@+id/sw_jetlag"
-            style="@style/SgSwitch"
-            android:text="@string/str_settings_jetlag" />
-
-        <Switch
-            android:id="@+id/sw_jetlag_noalarm"
-            style="@style/SgSwitch"
-            android:text="@string/str_settings_jetlag_noalarm" />
-
-        <Switch
-            android:id="@+id/sw_only_clock"
-            style="@style/SgSwitch"
-            android:text="@string/str_settings_only_clock" />
-
-        <Button
-            android:id="@+id/btn_clear_log"
-            android:layout_width="match_parent"
-            android:layout_height="@dimen/sg_touch_min"
-            android:layout_marginTop="@dimen/sg_space_row"
-            android:minHeight="@dimen/sg_touch_min"
-            android:text="@string/str_settings_clear_log"
-            android:textColor="@color/sg_accent" />
+        <TextView
+            android:id="@+id/txt_footnote"
+            style="@style/SgText.Foot"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="@string/str_footnote" />
     </LinearLayout>
 </ScrollView>

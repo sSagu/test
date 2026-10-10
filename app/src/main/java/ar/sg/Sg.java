@@ -35,6 +35,7 @@ public final class Sg {
     static final String CH_WINDDOWN = "sg_winddown";
     static final String CH_LATE = "sg_late";
     static final String CH_HINTS = "sg_hints";
+    static final String GROUP_SILENT = "sg_silent";
 
     static final int NOTIF_ID_F1 = 1001, NOTIF_ID_F2 = 1002, NOTIF_ID_F3 = 1003, NOTIF_ID_F5 = 1005;
 
@@ -267,6 +268,12 @@ public final class Sg {
                 .setAutoCancel(true)
                 .setCategory(Notification.CATEGORY_REMINDER)
                 .setVisibility(Notification.VISIBILITY_PUBLIC);
+        if ((actions & Native.NOTIFY_SILENT) != 0) {
+            // Framework equivalent of NotificationCompat#setSilent: a group child whose group
+            // alerts only through its summary never sounds, vibrates or peeks (no summary is posted).
+            // setSound/setVibrate are ignored on O+ for channel notifications, so they are not used.
+            b.setGroup(GROUP_SILENT).setGroupAlertBehavior(Notification.GROUP_ALERT_SUMMARY);
+        }
         if (timeoutMin > 0) {
             b.setTimeoutAfter(timeoutMin * 60000L);
         }

@@ -710,7 +710,7 @@ static void test_core_ui_none_and_flatten(void) {
     int64_t buf[SG_UI_LEN];
     int64_t T = sg_at(D_FRI, 420);
     sg_tz_set(TZ_BA);
-    _Static_assert(SG_UI_LEN == 66, "UI layout size");
+    _Static_assert(SG_UI_LEN == 85, "UI layout size");
     sg_state_defaults(&s);
     o = obs(sg_at(D_THU, 1200), 0, SG_CREATOR_NONE);
     SG_CHECK(sg_core_ui(&s, &o, &m) == SG_OK);
@@ -759,9 +759,14 @@ static void test_core_command_budget(void) {
     SG_CHECK(sg_core_sync(&s, &o, SG_REASON_BROADCAST, &out) == SG_OK);
     SG_CHECK(out.dropped == 0);
     SG_CHECK(out.count <= SG_MAX_CMDS);
-    SG_CHECK(find(&out, SG_CMD_SCHEDULE, SG_ALARM_DEBOUNCE) != NULL);
+    /* v2 rule L: the moved alarm is still logged (record followed), so nothing is scheduled
+     * for it except the housekeeping of the open record */
+    SG_CHECK(find(&out, SG_CMD_SCHEDULE, SG_ALARM_DEBOUNCE) == NULL);
+    SG_CHECK(find(&out, SG_CMD_SCHEDULE, SG_ALARM_F1) == NULL);
+    SG_CHECK(find(&out, SG_CMD_SCHEDULE, SG_ALARM_F2) == NULL);
     SG_CHECK(find(&out, SG_CMD_SCHEDULE, SG_ALARM_HOUSEKEEP) != NULL);
     SG_CHECK(find(&out, SG_CMD_CANCEL_NOTIFY, SG_NK_F1) != NULL);
+    SG_CHECK(s.last_f1_for_T == T_new);
 }
 
 static void test_core_api_args(void) {
@@ -975,6 +980,641 @@ static void test_core_snooze_three_posts(void) {
     SG_CHECK(count_notify(&out, SG_NK_F3) == 0);
 }
 
+/* ---- v2 (docs/ADVICE-v2.md): in-app bedtime, reboot re-post, UI model v2 ---- */
+
+static void ui_at(const SgState *s, const SgObs *o, SgUiModel *m) {
+    SG_CHECK(sg_core_ui(s, o, m) == SG_OK);
+}
+
+/* Thu 20:00 sync for T = Fri 07:00, then F1 fires at 21:30: F1 posted, last_notified_ms
+ * = 21:30, F1_POSTED set. */
+static void v2_posted_f1(SgState *s, int64_t T) {
+    SgObs o;
+    SgCmdList out;
+    sg_state_defaults(s);
+    o = obs(sg_at(D_THU, 1200), T, SG_CREATOR_ALLOWED);
+    (void)sg_core_sync(s, &o, SG_REASON_BROADCAST, &out);
+    o = obs(sg_at(D_THU, 1290), T, SG_CREATOR_ALLOWED);
+    (void)sg_core_alarm_fired(s, &o, SG_ALARM_F1, &out);
+}
+
+/* Bedtime tapped in the app at 20:30 (inside the window, before F1): every F1/F2/F3 path
+ * is closed and a late F1 alarm posts nothing. */
+static void test_v2_sleep_marks_handled(void) {
+    SgState s;
+    SgCmdList out;
+    SgObs o;
+    int64_t T = sg_at(D_FRI, 420);
+    sg_state_defaults(&s);
+    o = obs(sg_at(D_THU, 1140), T, SG_CREATOR_ALLOWED);           /* 19:00, before the window */
+    SG_CHECK(sg_core_sync(&s, &o, SG_REASON_BROADCAST, &out) == SG_OK);
+    SG_CHECK(find(&out, SG_CMD_SCHEDULE, SG_ALARM_F1) != NULL);
+    o = obs(sg_at(D_THU, 1230), T, SG_CREATOR_ALLOWED);           /* 20:30 tap */
+    SG_CHECK(sg_core_action(&s, &o, SG_ACTION_SLEEP, &out) == SG_OK);
+    SG_CHECK(out.dropped == 0);
+    SG_CHECK(find(&out, SG_CMD_CANCEL_ALARM, SG_ALARM_F1) != NULL);
+    SG_CHECK(find(&out, SG_CMD_CANCEL_ALARM, SG_ALARM_F2) != NULL);
+    SG_CHECK(find(&out, SG_CMD_CANCEL_ALARM, SG_ALARM_DEBOUNCE) != NULL);
+    SG_CHECK(find(&out, SG_CMD_CANCEL_NOTIFY, SG_NK_F1) != NULL);
+    SG_CHECK(find(&out, SG_CMD_CANCEL_NOTIFY, SG_NK_F2) != NULL);
+    SG_CHECK(find(&out, SG_CMD_CANCEL_NOTIFY, SG_NK_F3) != NULL);
+    SG_CHECK(s.last_f1_for_T == T);
+    SG_CHECK(s.night_count == 1);
+    /* RECHECK while logged: neither F1 nor the debounce is scheduled */
+    o = obs(sg_at(D_THU, 1235), T, SG_CREATOR_ALLOWED);
+    SG_CHECK(sg_core_sync(&s, &o, SG_REASON_RECHECK, &out) == SG_OK);
+    SG_CHECK(find(&out, SG_CMD_SCHEDULE, SG_ALARM_F1) == NULL);
+    SG_CHECK(find(&out, SG_CMD_SCHEDULE, SG_ALARM_DEBOUNCE) == NULL);
+    /* the F1 alarm that was still queued fires at 21:30: nothing is posted */
+    o = obs(sg_at(D_THU, 1290), T, SG_CREATOR_ALLOWED);
+    SG_CHECK(sg_core_alarm_fired(&s, &o, SG_ALARM_F1, &out) == SG_OK);
+    SG_CHECK(out.dropped == 0);
+    SG_CHECK(count_notify(&out, SG_NK_F1) == 0);
+}
+
+/* Two taps for the same alarm, 90 min apart: one night, bed moved forward, and the
+ * weekday reference sample is taken only by the first tap. */
+static void test_v2_retap_updates(void) {
+    SgState s;
+    SgCmdList out;
+    SgObs o;
+    const SgNight *n;
+    int64_t T = sg_at(D_FRI, 420);
+    int32_t refs;
+    sg_state_defaults(&s);
+    o = obs(sg_at(D_THU, 1380), T, SG_CREATOR_ALLOWED);           /* 23:00 */
+    SG_CHECK(sg_core_action(&s, &o, SG_ACTION_SLEEP, &out) == SG_OK);
+    SG_CHECK(s.night_count == 1);
+    SG_CHECK(s.ref_count == 1);                                   /* Friday wake: weekday sample */
+    refs = s.ref_count;
+    o = obs(sg_at(D_FRI, 30), T, SG_CREATOR_ALLOWED);             /* 00:30 */
+    SG_CHECK(sg_core_action(&s, &o, SG_ACTION_SLEEP, &out) == SG_OK);
+    SG_CHECK(out.dropped == 0);
+    SG_CHECK(s.night_count == 1);
+    n = sg_log_at(&s, 0);
+    SG_CHECK(n != NULL && n->bed_ms == sg_at(D_FRI, 30) && n->wake_ms == T && n->closed == 0);
+    SG_CHECK(s.ref_count == refs);
+}
+
+/* F1 posted, snoozed once, then tapped in the app: the snooze is cancelled and the
+ * alarm that was queued behind it posts nothing. */
+static void test_v2_snooze_then_sleep(void) {
+    SgState s;
+    SgCmdList out;
+    SgObs o;
+    const SgCmd *c;
+    int64_t T = sg_at(D_FRI, 420);
+    int64_t f1 = sg_at(D_THU, 1290);
+    int64_t snz = sg_at(D_THU, 1291);                             /* 21:31 */
+    sg_state_defaults(&s);
+    o = obs(sg_at(D_THU, 1260), T, SG_CREATOR_ALLOWED);
+    SG_CHECK(sg_core_sync(&s, &o, SG_REASON_BROADCAST, &out) == SG_OK);
+    o = obs(f1, T, SG_CREATOR_ALLOWED);
+    SG_CHECK(sg_core_alarm_fired(&s, &o, SG_ALARM_F1, &out) == SG_OK);
+    SG_CHECK(count_notify(&out, SG_NK_F1) == 1);
+    o = obs(snz, T, SG_CREATOR_ALLOWED);
+    SG_CHECK(sg_core_action(&s, &o, SG_ACTION_SNOOZE, &out) == SG_OK);
+    c = find(&out, SG_CMD_SCHEDULE, SG_ALARM_F1);
+    SG_CHECK(c != NULL && c->a[1] == snz + SG_MIN_TO_MS(SG_SNOOZE_MIN));
+    o = obs(sg_at(D_THU, 1295), T, SG_CREATOR_ALLOWED);           /* 21:35, tap in the app */
+    SG_CHECK(sg_core_action(&s, &o, SG_ACTION_SLEEP, &out) == SG_OK);
+    SG_CHECK(out.dropped == 0);
+    SG_CHECK(find(&out, SG_CMD_CANCEL_ALARM, SG_ALARM_F1) != NULL);
+    SG_CHECK(find(&out, SG_CMD_CANCEL_NOTIFY, SG_NK_F1) != NULL);
+    SG_CHECK(s.last_f1_for_T == T);
+    SG_CHECK((s.flags & SG_FLAG_F1_POSTED) == 0);
+    /* the snoozed alarm would have fired at 21:46: nothing is posted */
+    o = obs(snz + SG_MIN_TO_MS(SG_SNOOZE_MIN), T, SG_CREATOR_ALLOWED);
+    SG_CHECK(sg_core_alarm_fired(&s, &o, SG_ALARM_F1, &out) == SG_OK);
+    SG_CHECK(count_notify(&out, SG_NK_F1) == 0);
+}
+
+/* Logged for T1, then the alarm moves to T2 = T1 + 30 min: the night follows T2, nothing
+ * is scheduled for F1/F2/debounce, and the screen stays LOGGED. */
+static void test_v2_alarm_moved_after_logging(void) {
+    SgState s;
+    SgCmdList out;
+    SgObs o;
+    SgUiModel m;
+    int64_t T1 = sg_at(D_FRI, 420);
+    int64_t T2 = sg_at(D_FRI, 450);
+    int64_t now = sg_at(D_THU, 1390);                             /* 23:10 */
+    sg_state_defaults(&s);
+    o = obs(sg_at(D_THU, 1380), T1, SG_CREATOR_ALLOWED);
+    SG_CHECK(sg_core_action(&s, &o, SG_ACTION_SLEEP, &out) == SG_OK);
+    o = obs(now, T2, SG_CREATOR_ALLOWED);
+    SG_CHECK(sg_core_sync(&s, &o, SG_REASON_BROADCAST, &out) == SG_OK);
+    SG_CHECK(out.dropped == 0);
+    SG_CHECK(find(&out, SG_CMD_SCHEDULE, SG_ALARM_F1) == NULL);
+    SG_CHECK(find(&out, SG_CMD_SCHEDULE, SG_ALARM_F2) == NULL);
+    SG_CHECK(find(&out, SG_CMD_SCHEDULE, SG_ALARM_DEBOUNCE) == NULL);
+    SG_CHECK(sg_log_at(&s, 0) != NULL && sg_log_at(&s, 0)->wake_ms == T2);
+    SG_CHECK(s.last_f1_for_T == T2);
+    ui_at(&s, &o, &m);
+    SG_CHECK(m.bed_state == SG_BED_LOGGED && m.bed_mod == 1380 && m.bed_can_update == 1);
+    SG_CHECK(m.hero == SG_HERO_ALARM && m.alarm_mod == 450);
+}
+
+/* Bedtime control states (§2): BEFORE, AVAILABLE, LOGGED, CLOSED and HIDDEN. */
+static void test_v2_ui_bed_states(void) {
+    SgState s;
+    SgCmdList out;
+    SgObs o;
+    SgUiModel m;
+    int64_t T = sg_at(D_FRI, 420);                                /* lo 19:30 Thu, hi 06:00 Fri */
+    int64_t T_w = sg_at(D_FRI, 1380);
+    sg_state_defaults(&s);
+    o = obs(sg_at(D_THU, 1169), T, SG_CREATOR_ALLOWED);           /* 19:29 */
+    ui_at(&s, &o, &m);
+    SG_CHECK(m.bed_state == SG_BED_BEFORE && m.bed_mod == 1170 && m.bed_can_update == 0);
+    o = obs(sg_at(D_THU, 1170), T, SG_CREATOR_ALLOWED);           /* 19:30: window opens */
+    ui_at(&s, &o, &m);
+    SG_CHECK(m.bed_state == SG_BED_AVAILABLE && m.bed_mod == 360 && m.bed_can_update == 0);
+    o = obs(sg_at(D_FRI, 360), T, SG_CREATOR_ALLOWED);            /* 06:00: last minute */
+    ui_at(&s, &o, &m);
+    SG_CHECK(m.bed_state == SG_BED_AVAILABLE && m.bed_mod == 360);
+    o = obs(sg_at(D_FRI, 361), T, SG_CREATOR_ALLOWED);            /* 06:01 */
+    ui_at(&s, &o, &m);
+    SG_CHECK(m.bed_state == SG_BED_CLOSED && m.bed_mod == 360 && m.bed_can_update == 0);
+    /* tapped at 23:00: LOGGED with the tap time, Actualizar while the window is open */
+    sg_state_defaults(&s);
+    o = obs(sg_at(D_THU, 1380), T, SG_CREATOR_ALLOWED);
+    SG_CHECK(sg_core_action(&s, &o, SG_ACTION_SLEEP, &out) == SG_OK);
+    ui_at(&s, &o, &m);
+    SG_CHECK(m.bed_state == SG_BED_LOGGED && m.bed_mod == 1380 && m.bed_can_update == 1);
+    o = obs(sg_at(D_FRI, 361), T, SG_CREATOR_ALLOWED);
+    ui_at(&s, &o, &m);
+    SG_CHECK(m.bed_state == SG_BED_LOGGED && m.bed_mod == 1380 && m.bed_can_update == 0);
+    /* HIDDEN: master toggle off, no alarm, outside 04:00..12:00, other app, > 36 h away */
+    sg_state_defaults(&s);
+    set_flag(&s, SG_FLAG_ENABLED, 0);
+    o = obs(sg_at(D_THU, 1170), T, SG_CREATOR_ALLOWED);
+    ui_at(&s, &o, &m);
+    SG_CHECK(m.bed_state == SG_BED_HIDDEN && m.bed_mod == -1 && m.bed_can_update == 0);
+    sg_state_defaults(&s);
+    o = obs(sg_at(D_THU, 1170), 0, SG_CREATOR_NONE);
+    ui_at(&s, &o, &m);
+    SG_CHECK(m.bed_state == SG_BED_HIDDEN && m.bed_mod == -1);
+    o = obs(sg_at(D_THU, 1200), T_w, SG_CREATOR_ALLOWED);         /* REL_WINDOW */
+    ui_at(&s, &o, &m);
+    SG_CHECK(m.bed_state == SG_BED_HIDDEN && m.bed_mod == -1);
+    o = obs(T - SG_MIN_TO_MS(2400), T, SG_CREATOR_ALLOWED);       /* REL_HORIZON */
+    ui_at(&s, &o, &m);
+    SG_CHECK(m.bed_state == SG_BED_HIDDEN && m.bed_mod == -1);
+    o = obs(sg_at(D_THU, 1170), T, SG_CREATOR_OTHER);             /* REL_OTHER_APP */
+    ui_at(&s, &o, &m);
+    SG_CHECK(m.bed_state == SG_BED_HIDDEN && m.bed_mod == -1);
+}
+
+/* Hero card selection (§3, field 66) and the weekday of the alarm (field 67). */
+static void test_v2_ui_hero(void) {
+    SgState s;
+    SgObs o;
+    SgUiModel m;
+    int64_t T = sg_at(D_FRI, 420);
+    int64_t now = sg_at(D_THU, 1200);
+    sg_state_defaults(&s);
+    o = obs(now, T, SG_CREATOR_ALLOWED);
+    ui_at(&s, &o, &m);
+    SG_CHECK(m.hero == SG_HERO_ALARM && m.alarm_wday == 5 && m.alarm_mod == 420);
+    o = obs(now, T, SG_CREATOR_OTHER);
+    ui_at(&s, &o, &m);
+    SG_CHECK(m.hero == SG_HERO_OTHER_APP && m.alarm_mod == 420);
+    o = obs(now, sg_at(D_FRI, 1380), SG_CREATOR_ALLOWED);
+    ui_at(&s, &o, &m);
+    SG_CHECK(m.hero == SG_HERO_OUT_OF_WINDOW);
+    o = obs(T - SG_MIN_TO_MS(2400), T, SG_CREATOR_ALLOWED);
+    ui_at(&s, &o, &m);
+    SG_CHECK(m.hero == SG_HERO_FAR);
+    o = obs(now, 0, SG_CREATOR_NONE);
+    ui_at(&s, &o, &m);
+    SG_CHECK(m.hero == SG_HERO_NO_ALARM && m.alarm_wday == -1);
+    o = obs(T + SG_MIN_TO_MS(1), T, SG_CREATOR_ALLOWED);          /* T already passed */
+    ui_at(&s, &o, &m);
+    SG_CHECK(m.hero == SG_HERO_NO_ALARM && m.alarm_wday == -1);
+    /* the master toggle wins over every alarm state */
+    set_flag(&s, SG_FLAG_ENABLED, 0);
+    o = obs(now, T, SG_CREATOR_ALLOWED);
+    ui_at(&s, &o, &m);
+    SG_CHECK(m.hero == SG_HERO_DISABLED);
+    o = obs(now, sg_at(D_FRI, 1380), SG_CREATOR_ALLOWED);
+    ui_at(&s, &o, &m);
+    SG_CHECK(m.hero == SG_HERO_DISABLED);
+    o = obs(now, 0, SG_CREATOR_NONE);
+    ui_at(&s, &o, &m);
+    SG_CHECK(m.hero == SG_HERO_DISABLED);
+}
+
+/* Reminder row (§3, fields 68-69): UPCOMING, SENT, NONE and HIDDEN. */
+static void test_v2_ui_remind(void) {
+    SgState s;
+    SgCmdList out;
+    SgObs o;
+    SgUiModel m;
+    int64_t T = sg_at(D_FRI, 420);
+    sg_state_defaults(&s);
+    o = obs(sg_at(D_THU, 1200), T, SG_CREATOR_ALLOWED);           /* 20:00 */
+    ui_at(&s, &o, &m);
+    SG_CHECK(m.remind_state == SG_REMIND_UPCOMING && m.remind_mod == 1290);
+    SG_CHECK(sg_core_sync(&s, &o, SG_REASON_BROADCAST, &out) == SG_OK);
+    o = obs(sg_at(D_THU, 1295), T, SG_CREATOR_ALLOWED);           /* F1 fires at 21:35 */
+    SG_CHECK(sg_core_alarm_fired(&s, &o, SG_ALARM_F1, &out) == SG_OK);
+    SG_CHECK(count_notify(&out, SG_NK_F1) == 1);
+    o = obs(sg_at(D_THU, 1296), T, SG_CREATOR_ALLOWED);
+    ui_at(&s, &o, &m);
+    SG_CHECK(m.remind_state == SG_REMIND_SENT && m.remind_mod == 1295);
+    /* alarm set after F1 + grace (04:00 for 07:00): no reminder row */
+    sg_state_defaults(&s);
+    o = obs(sg_at(D_FRI, 240), T, SG_CREATOR_ALLOWED);
+    SG_CHECK(sg_core_sync(&s, &o, SG_REASON_BROADCAST, &out) == SG_OK);
+    SG_CHECK(find(&out, SG_CMD_SCHEDULE, SG_ALARM_DEBOUNCE) != NULL);
+    ui_at(&s, &o, &m);
+    SG_CHECK(m.remind_state == SG_REMIND_NONE && m.remind_mod == -1);
+    /* tapped before F1: the night is handled, no reminder row */
+    sg_state_defaults(&s);
+    o = obs(sg_at(D_THU, 1230), T, SG_CREATOR_ALLOWED);
+    SG_CHECK(sg_core_action(&s, &o, SG_ACTION_SLEEP, &out) == SG_OK);
+    o = obs(sg_at(D_THU, 1231), T, SG_CREATOR_ALLOWED);
+    ui_at(&s, &o, &m);
+    SG_CHECK(m.remind_state == SG_REMIND_NONE && m.remind_mod == -1);
+    /* no alarm: hidden */
+    sg_state_defaults(&s);
+    o = obs(sg_at(D_THU, 1200), 0, SG_CREATOR_NONE);
+    ui_at(&s, &o, &m);
+    SG_CHECK(m.remind_state == SG_REMIND_HIDDEN && m.remind_mod == -1);
+}
+
+/* Week bars (fields 77-84), label, debt state. Wed 20:00 -> Thu 07:00 is est 640 (full bar),
+ * Thu 23:10 -> Fri 07:00 is est 450 (750 permille); the other five nights are dashes. */
+static void test_v2_ui_week(void) {
+    SgState s;
+    SgObs o;
+    SgUiModel m;
+    int i;
+    int64_t now = sg_at(D_FRI, 720);
+    sg_state_defaults(&s);
+    o = obs(now, 0, SG_CREATOR_NONE);
+    ui_at(&s, &o, &m);
+    for (i = 0; i < SG_DEBT_WINDOW_NIGHTS; i++) {
+        SG_CHECK(m.bar_permille[i] == -1);
+    }
+    SG_CHECK(m.label_night == -1 && m.debt_state == SG_DEBT_EMPTY);
+    SG_CHECK(m.target_permille == 800);
+    (void)sg_log_bed_tap(&s, sg_at(20261007, 1200), sg_at(D_THU, 420));
+    (void)sg_log_bed_tap(&s, sg_at(D_THU, 1390), sg_at(D_FRI, 420));
+    ui_at(&s, &o, &m);
+    for (i = 0; i < 5; i++) {
+        SG_CHECK(m.bar_permille[i] == -1);
+    }
+    SG_CHECK(m.bar_permille[5] == 1000 && m.bar_permille[6] == 750);
+    SG_CHECK(m.label_night == 6);
+    SG_CHECK(m.debt_state == SG_DEBT_ZERO && m.week.debt_min == 0);  /* surplus offsets deficit */
+    /* two nights of est 450: debt 60 */
+    sg_state_defaults(&s);
+    (void)sg_log_bed_tap(&s, sg_at(20261007, 1390), sg_at(D_THU, 420));
+    (void)sg_log_bed_tap(&s, sg_at(D_THU, 1390), sg_at(D_FRI, 420));
+    ui_at(&s, &o, &m);
+    SG_CHECK(m.bar_permille[5] == 750 && m.bar_permille[6] == 750);
+    SG_CHECK(m.debt_state == SG_DEBT_SOME && m.week.debt_min == 60);
+    SG_CHECK(m.label_night == 6);
+}
+
+/* Banner and permission prompt flags (fields 74-75): enabled && !allowed, !allowed && !asked. */
+static void test_v2_ui_notif_flags(void) {
+    SgState s;
+    SgObs o;
+    SgUiModel m;
+    /* enabled, notif_allowed, prompted, banner, ask */
+    static const int rows[6][5] = {
+        {1, 0, 0, 1, 1},
+        {1, 0, 1, 1, 0},
+        {1, 1, 0, 0, 0},
+        {1, 1, 1, 0, 0},
+        {0, 0, 0, 0, 1},
+        {0, 1, 1, 0, 0}
+    };
+    int r;
+    int64_t T = sg_at(D_FRI, 420);
+    for (r = 0; r < 6; r++) {
+        sg_state_defaults(&s);
+        set_flag(&s, SG_FLAG_ENABLED, rows[r][0]);
+        set_flag(&s, SG_FLAG_NOTIF_PROMPTED, rows[r][2]);
+        o = obs(sg_at(D_THU, 1200), T, SG_CREATOR_ALLOWED);
+        o.notif_allowed = (uint8_t)rows[r][1];
+        ui_at(&s, &o, &m);
+        SG_CHECK(m.notif_banner == rows[r][3]);
+        SG_CHECK(m.ask_notif == rows[r][4]);
+    }
+}
+
+/* sg_core_ui_flatten writes the v2 words (66..84) and the v1 words stay in place. */
+static void test_v2_ui_flatten(void) {
+    SgState s;
+    SgObs o;
+    SgUiModel m;
+    int64_t buf[SG_UI_LEN];
+    int i;
+    int64_t T = sg_at(D_FRI, 420);
+    _Static_assert(SG_UI_BARS + SG_DEBT_WINDOW_NIGHTS == SG_UI_LEN, "bars end the model");
+    sg_state_defaults(&s);
+    o = obs(sg_at(D_THU, 1200), T, SG_CREATOR_ALLOWED);           /* 20:00 */
+    ui_at(&s, &o, &m);
+    sg_core_ui_flatten(&m, buf);
+    SG_CHECK(buf[SG_UI_HERO] == SG_HERO_ALARM);
+    SG_CHECK(buf[SG_UI_ALARM_WDAY] == 5);
+    SG_CHECK(buf[SG_UI_REMIND_STATE] == SG_REMIND_UPCOMING && buf[SG_UI_REMIND_MOD] == 1290);
+    SG_CHECK(buf[SG_UI_BED_STATE] == SG_BED_AVAILABLE && buf[SG_UI_BED_MOD] == 360);
+    SG_CHECK(buf[SG_UI_BED_CAN_UPDATE] == 0);
+    SG_CHECK(buf[SG_UI_DEBT_STATE] == SG_DEBT_EMPTY);
+    SG_CHECK(buf[SG_UI_NOTIF_BANNER] == 0 && buf[SG_UI_ASK_NOTIF] == 0);
+    SG_CHECK(buf[SG_UI_TARGET_PERMILLE] == 800 && buf[SG_UI_LABEL_NIGHT] == -1);
+    for (i = 0; i < SG_DEBT_WINDOW_NIGHTS; i++) {
+        SG_CHECK(buf[SG_UI_BARS + i] == m.bar_permille[i]);
+        SG_CHECK(buf[SG_UI_BARS + i] == -1);
+    }
+    SG_CHECK(buf[SG_UI_ALARM_REL] == SG_REL_OK && buf[SG_UI_DEBT_MIN] == m.week.debt_min);
+}
+
+/* Reboot re-post (§4): one silent NOTIFY with the remaining timeout; other reasons never
+ * re-post. */
+static void test_v2_reboot_repost(void) {
+    SgState s;
+    SgCmdList out;
+    SgObs o;
+    const SgCmd *c;
+    int64_t T = sg_at(D_FRI, 420);
+    int64_t last;
+    v2_posted_f1(&s, T);
+    SG_CHECK((s.flags & SG_FLAG_F1_POSTED) != 0);
+    SG_CHECK(s.last_notified_ms == sg_at(D_THU, 1290));
+    last = s.last_notified_ms;
+    o = obs(sg_at(D_THU, 1380), T, SG_CREATOR_ALLOWED);           /* 23:00, 90 min after F1 */
+    SG_CHECK(sg_core_sync(&s, &o, SG_REASON_BOOT, &out) == SG_OK);
+    SG_CHECK(out.dropped == 0);
+    SG_CHECK(count_notify(&out, SG_NK_F1) == 1);
+    c = find(&out, SG_CMD_NOTIFY, SG_NK_F1);
+    SG_CHECK(c != NULL && c->a[5] == (SG_ACT_SLEEP | SG_ACT_SNOOZE | SG_NOTIFY_SILENT));
+    SG_CHECK(c != NULL && c->a[6] == 90);
+    SG_CHECK(s.last_notified_ms == last);
+    SG_CHECK((s.flags & SG_FLAG_F1_POSTED) != 0);
+    /* every other reason never re-posts (no loops) */
+    o = obs(sg_at(D_THU, 1381), T, SG_CREATOR_ALLOWED);
+    SG_CHECK(sg_core_sync(&s, &o, SG_REASON_RECHECK, &out) == SG_OK);
+    SG_CHECK(count_notify(&out, SG_NK_F1) == 0);
+    o = obs(sg_at(D_THU, 1382), T, SG_CREATOR_ALLOWED);
+    SG_CHECK(sg_core_sync(&s, &o, SG_REASON_APP_OPEN, &out) == SG_OK);
+    SG_CHECK(count_notify(&out, SG_NK_F1) == 0);
+    o = obs(sg_at(D_THU, 1383), T, SG_CREATOR_ALLOWED);
+    SG_CHECK(sg_core_sync(&s, &o, SG_REASON_BROADCAST, &out) == SG_OK);
+    SG_CHECK(count_notify(&out, SG_NK_F1) == 0);
+    /* boot at 00:20 Friday: 170 min since the post, 10 min of timeout left */
+    o = obs(sg_at(D_FRI, 20), T, SG_CREATOR_ALLOWED);
+    SG_CHECK(sg_core_sync(&s, &o, SG_REASON_BOOT, &out) == SG_OK);
+    c = find(&out, SG_CMD_NOTIFY, SG_NK_F1);
+    SG_CHECK(count_notify(&out, SG_NK_F1) == 1 && c != NULL && c->a[6] == 10);
+    /* boot at 00:30: 180 min, the notification has timed out */
+    o = obs(sg_at(D_FRI, 30), T, SG_CREATOR_ALLOWED);
+    SG_CHECK(sg_core_sync(&s, &o, SG_REASON_BOOT, &out) == SG_OK);
+    SG_CHECK(count_notify(&out, SG_NK_F1) == 0);
+    /* a package update behaves like a boot */
+    v2_posted_f1(&s, T);
+    o = obs(sg_at(D_THU, 1380), T, SG_CREATOR_ALLOWED);
+    SG_CHECK(sg_core_sync(&s, &o, SG_REASON_PKG_REPLACED, &out) == SG_OK);
+    SG_CHECK(count_notify(&out, SG_NK_F1) == 1);
+}
+
+/* Reboot without re-post (§4): logged nights, out of the window, grace path, snooze limit. */
+static void test_v2_reboot_no_repost(void) {
+    SgState s;
+    SgCmdList out;
+    SgObs o;
+    const SgCmd *c;
+    int64_t T1 = sg_at(D_FRI, 420);
+    int64_t T2 = sg_at(D_FRI, 450);
+    /* tapped before the reboot and the alarm moved across it: logged, no re-post */
+    v2_posted_f1(&s, T1);
+    o = obs(sg_at(D_THU, 1380), T1, SG_CREATOR_ALLOWED);
+    SG_CHECK(sg_core_action(&s, &o, SG_ACTION_SLEEP, &out) == SG_OK);
+    o = obs(sg_at(D_THU, 1385), T2, SG_CREATOR_ALLOWED);
+    SG_CHECK(sg_core_sync(&s, &o, SG_REASON_BOOT, &out) == SG_OK);
+    SG_CHECK(count_notify(&out, SG_NK_F1) == 0);
+    /* boot at 06:01: outside the bed window (and past the 3 h lifetime) */
+    v2_posted_f1(&s, T1);
+    o = obs(sg_at(D_FRI, 361), T1, SG_CREATOR_ALLOWED);
+    SG_CHECK(sg_core_sync(&s, &o, SG_REASON_BOOT, &out) == SG_OK);
+    SG_CHECK(count_notify(&out, SG_NK_F1) == 0);
+    /* boot inside the grace period, F1 never posted: v1 path, no SILENT bit */
+    sg_state_defaults(&s);
+    o = obs(sg_at(D_THU, 900), T1, SG_CREATOR_ALLOWED);
+    SG_CHECK(sg_core_sync(&s, &o, SG_REASON_BROADCAST, &out) == SG_OK);
+    o = obs(sg_at(D_THU, 1305), T1, SG_CREATOR_ALLOWED);          /* 21:45 */
+    SG_CHECK(sg_core_sync(&s, &o, SG_REASON_BOOT, &out) == SG_OK);
+    SG_CHECK(count_notify(&out, SG_NK_F1) == 0);
+    SG_CHECK(find(&out, SG_CMD_SCHEDULE, SG_ALARM_F1) != NULL);
+    SG_CHECK(sg_core_alarm_fired(&s, &o, SG_ALARM_F1, &out) == SG_OK);
+    c = find(&out, SG_CMD_NOTIFY, SG_NK_F1);
+    SG_CHECK(c != NULL && (c->a[5] & SG_NOTIFY_SILENT) == 0);
+    /* snooze limit reached, notification gone, snooze alarm lost: no silent post; the
+     * snooze is re-armed 15 min after the boot (ADVICE-v2 section 4, C2) */
+    sg_state_defaults(&s);
+    o = obs(sg_at(D_THU, 1200), T1, SG_CREATOR_ALLOWED);
+    SG_CHECK(sg_core_sync(&s, &o, SG_REASON_BROADCAST, &out) == SG_OK);
+    s.snooze_count = 2;
+    set_flag(&s, SG_FLAG_F1_POSTED, 0);
+    s.last_f1_for_T = T1;
+    s.last_notified_ms = sg_at(D_THU, 1310);                      /* 21:50 */
+    o = obs(sg_at(D_THU, 1320), T1, SG_CREATOR_ALLOWED);          /* 22:00 */
+    SG_CHECK(sg_core_sync(&s, &o, SG_REASON_BOOT, &out) == SG_OK);
+    SG_CHECK(count_notify(&out, SG_NK_F1) == 0);
+    c = find(&out, SG_CMD_SCHEDULE, SG_ALARM_F1);
+    SG_CHECK(c != NULL && c->a[1] == sg_at(D_THU, 1335) && c->a[2] == SG_SCHED_EXACT_IDLE);
+    SG_CHECK((s.flags & SG_FLAG_F1_POSTED) == 0);
+}
+
+/* C2: a snooze is pending (F1 posted 21:30, SNOOZE at 21:35 -> F1 due 21:50). A reboot or
+ * an update must keep it audible: no silent post, the lost alarm is re-armed 15 min after
+ * `now`, and that alarm posts a normal (non-silent) F1 with the SNOOZE action. */
+static void test_v2_reboot_snooze_pending(void) {
+    SgState s;
+    SgCmdList out;
+    SgObs o;
+    const SgCmd *c;
+    int64_t T = sg_at(D_FRI, 420);
+    int reason;
+    int i;
+
+    for (i = 0; i < 2; i++) {
+        reason = (i == 0) ? SG_REASON_BOOT : SG_REASON_PKG_REPLACED;
+        v2_posted_f1(&s, T);                                      /* F1 posted 21:30 */
+        o = obs(sg_at(D_THU, 1295), T, SG_CREATOR_ALLOWED);       /* 21:35 */
+        SG_CHECK(sg_core_action(&s, &o, SG_ACTION_SNOOZE, &out) == SG_OK);
+        SG_CHECK(s.snooze_count == 1 && (s.flags & SG_FLAG_F1_POSTED) == 0);
+        o = obs(sg_at(D_THU, 1297), T, SG_CREATOR_ALLOWED);       /* 21:37 */
+        SG_CHECK(sg_core_sync(&s, &o, reason, &out) == SG_OK);
+        SG_CHECK(out.dropped == 0);
+        SG_CHECK(count_notify(&out, SG_NK_F1) == 0);
+        c = find(&out, SG_CMD_SCHEDULE, SG_ALARM_F1);
+        SG_CHECK(c != NULL && c->a[1] == sg_at(D_THU, 1312) && c->a[2] == SG_SCHED_EXACT_IDLE);
+        /* the re-armed alarm posts an audible snoozed F1 */
+        o = obs(sg_at(D_THU, 1312), T, SG_CREATOR_ALLOWED);
+        SG_CHECK(sg_core_alarm_fired(&s, &o, SG_ALARM_F1, &out) == SG_OK);
+        c = find(&out, SG_CMD_NOTIFY, SG_NK_F1);
+        SG_CHECK(count_notify(&out, SG_NK_F1) == 1);
+        SG_CHECK(c != NULL && (c->a[5] & SG_NOTIFY_SILENT) == 0);
+        SG_CHECK(c != NULL && (c->a[5] & SG_ACT_SNOOZE) != 0);
+        SG_CHECK((s.flags & SG_FLAG_F1_POSTED) != 0);
+    }
+}
+
+/* C3: BOOT_COMPLETED arrives before the clock app re-registers its alarm (no next alarm).
+ * The unanswered F1 is still owed: the BROADCAST that follows must re-post it, silently,
+ * with the remaining lifetime, and only once. */
+static void test_v2_boot_unseen_then_broadcast(void) {
+    SgState s;
+    SgCmdList out;
+    SgObs o;
+    const SgCmd *c;
+    int64_t T = sg_at(D_FRI, 420);
+
+    v2_posted_f1(&s, T);                                          /* F1 posted 21:30 */
+    o = obs(sg_at(D_THU, 1380), 0, SG_CREATOR_NONE);              /* 23:00, alarm list empty */
+    SG_CHECK(sg_core_sync(&s, &o, SG_REASON_BOOT, &out) == SG_OK);
+    SG_CHECK(out.dropped == 0);
+    SG_CHECK(count_notify(&out, SG_NK_F1) == 0);
+    SG_CHECK(s.boot_unseen == 1);
+    SG_CHECK(s.last_seen_T == T);
+    SG_CHECK((s.flags & SG_FLAG_F1_POSTED) != 0);
+    /* the clock app re-registers: broadcast 5 s later, same T */
+    o = obs(sg_at(D_THU, 1380) + 5000, T, SG_CREATOR_ALLOWED);
+    SG_CHECK(sg_core_sync(&s, &o, SG_REASON_BROADCAST, &out) == SG_OK);
+    SG_CHECK(out.dropped == 0);
+    c = find(&out, SG_CMD_NOTIFY, SG_NK_F1);
+    SG_CHECK(count_notify(&out, SG_NK_F1) == 1);
+    SG_CHECK(c != NULL && c->a[5] == (SG_ACT_SLEEP | SG_ACT_SNOOZE | SG_NOTIFY_SILENT));
+    SG_CHECK(c != NULL && c->a[6] == 90);
+    SG_CHECK(s.boot_unseen == 0);
+    /* settled: a later broadcast does not repeat the re-post */
+    o = obs(sg_at(D_THU, 1381), T, SG_CREATOR_ALLOWED);
+    SG_CHECK(sg_core_sync(&s, &o, SG_REASON_BROADCAST, &out) == SG_OK);
+    SG_CHECK(count_notify(&out, SG_NK_F1) == 0);
+}
+
+/* C3: the owed-repost flag is in memory only; it is never written to the state file. */
+static void test_v2_boot_unseen_not_persisted(void) {
+    SgState a;
+    SgState b;
+    uint8_t buf[SG_STORE_SIZE];
+    SgObs o;
+    SgCmdList out;
+    int64_t T = sg_at(D_FRI, 420);
+
+    v2_posted_f1(&a, T);
+    o = obs(sg_at(D_THU, 1380), 0, SG_CREATOR_NONE);
+    SG_CHECK(sg_core_sync(&a, &o, SG_REASON_BOOT, &out) == SG_OK);
+    SG_CHECK(a.boot_unseen == 1);
+    sg_store_encode(&a, buf);
+    sg_state_defaults(&b);
+    SG_CHECK(sg_store_decode(buf, &b) == SG_STORE_OK);
+    SG_CHECK(b.boot_unseen == 0);
+    SG_CHECK(b.last_seen_T == T);
+}
+
+/* R2-C2: an in-app SLEEP before F1 closes F1 for T, but the weekend hint that F1 would have
+ * armed must still fire. Ref 07:00 x3, T Sat 10:30, F1 Sat 01:00, window opens Fri 23:00. */
+static void test_v2_early_sleep_keeps_f5_hint(void) {
+    SgState s;
+    SgCmdList out;
+    SgObs o;
+    const SgCmd *c;
+    int64_t T = sg_at(D_SAT, 630);
+    int64_t tap = sg_at(D_FRI, 1410);                     /* Friday 23:30 */
+    int i;
+
+    sg_state_defaults(&s);
+    for (i = 0; i < 3; i++) {
+        sg_ref_add(&s, 420);
+    }
+    o = obs(sg_at(D_FRI, 1200), T, SG_CREATOR_ALLOWED);   /* 20:00, before the window */
+    SG_CHECK(sg_core_sync(&s, &o, SG_REASON_BROADCAST, &out) == SG_OK);
+    SG_CHECK(find(&out, SG_CMD_SCHEDULE, SG_ALARM_F1) != NULL);
+    SG_CHECK(find(&out, SG_CMD_SCHEDULE, SG_ALARM_F5_HINT) == NULL);
+    o = obs(tap, T, SG_CREATOR_ALLOWED);
+    SG_CHECK(sg_core_action(&s, &o, SG_ACTION_SLEEP, &out) == SG_OK);
+    SG_CHECK(out.dropped == 0);
+    SG_CHECK(s.last_f1_for_T == T);
+    SG_CHECK(find(&out, SG_CMD_CANCEL_ALARM, SG_ALARM_F1) != NULL);
+    c = find(&out, SG_CMD_SCHEDULE, SG_ALARM_F5_HINT);
+    SG_CHECK(c != NULL && c->a[1] == tap + SG_MIN_TO_MS(1) && c->a[2] == SG_SCHED_EXACT_IDLE);
+    SG_CHECK(out.count <= SG_MAX_CMDS);
+    o = obs(tap + SG_MIN_TO_MS(1), T, SG_CREATOR_ALLOWED);
+    SG_CHECK(sg_core_alarm_fired(&s, &o, SG_ALARM_F5_HINT, &out) == SG_OK);
+    SG_CHECK(count_notify(&out, SG_NK_F5) == 1);
+    c = find(&out, SG_CMD_NOTIFY, SG_NK_F5);
+    SG_CHECK(c != NULL && c->a[1] == SG_TXT_F5_ALARM);
+    SG_CHECK(c != NULL && c->a[2] == 630 && c->a[3] == 210);
+    SG_CHECK(c != NULL && c->a[4] == 480);                /* ref 420 + 60, rounded to 15 */
+    SG_CHECK(s.last_f5_for_T == T);
+    /* a weekday wake has no drift: an early tap arms no hint (Fri 07:00, tap Thu 23:30) */
+    sg_state_defaults(&s);
+    for (i = 0; i < 3; i++) {
+        sg_ref_add(&s, 420);
+    }
+    T = sg_at(D_FRI, 420);
+    o = obs(sg_at(D_THU, 1200), T, SG_CREATOR_ALLOWED);
+    SG_CHECK(sg_core_sync(&s, &o, SG_REASON_BROADCAST, &out) == SG_OK);
+    o = obs(sg_at(D_THU, 1410), T, SG_CREATOR_ALLOWED);
+    SG_CHECK(sg_core_action(&s, &o, SG_ACTION_SLEEP, &out) == SG_OK);
+    SG_CHECK(find(&out, SG_CMD_SCHEDULE, SG_ALARM_F5_HINT) == NULL);
+}
+
+/* Mirror of the JNI glue's mutate() adopt policy (sg_jni.c is device-only, so the host cannot
+ * link it). `adopt_always` 1 is the fixed glue; 0 is the old one that adopted only when the
+ * encoded image changed. Returns whether the image changed (i.e. whether the file is written). */
+static int mirror_mutate(SgState *g, const SgState *work, int adopt_always) {
+    uint8_t ea[SG_STORE_SIZE];
+    uint8_t eb[SG_STORE_SIZE];
+    int changed;
+
+    sg_store_encode(g, ea);
+    sg_store_encode(work, eb);
+    changed = memcmp(ea, eb, SG_STORE_SIZE) != 0;
+    if (adopt_always || changed) {
+        *g = *work;
+    }
+    return changed;
+}
+
+/* R2-C1: BOOT with an empty alarm list sets boot_unseen only, an in-memory field that the file
+ * image does not show. The glue must adopt it anyway, or the BROADCAST that follows never
+ * re-posts the owed F1. The old policy (adopt only on an image change) loses it, which the
+ * second pass shows. */
+static void test_v2_boot_unseen_adopted_by_glue(void) {
+    SgState g;
+    SgState work;
+    SgObs o;
+    SgCmdList out;
+    const SgCmd *c;
+    int64_t T = sg_at(D_FRI, 420);
+    int adopt;
+
+    for (adopt = 0; adopt <= 1; adopt++) {
+        v2_posted_f1(&g, T);                                          /* F1 posted 21:30 */
+        o = obs(sg_at(D_THU, 1380), 0, SG_CREATOR_NONE);              /* BOOT 23:00 */
+        work = g;
+        SG_CHECK(sg_core_sync(&work, &o, SG_REASON_BOOT, &out) == SG_OK);
+        SG_CHECK(mirror_mutate(&g, &work, adopt) == 0);               /* image unchanged */
+        SG_CHECK(g.boot_unseen == (uint8_t)adopt);
+        o = obs(sg_at(D_THU, 1380) + 5000, T, SG_CREATOR_ALLOWED);    /* BROADCAST */
+        work = g;
+        SG_CHECK(sg_core_sync(&work, &o, SG_REASON_BROADCAST, &out) == SG_OK);
+        mirror_mutate(&g, &work, adopt);
+        SG_CHECK(count_notify(&out, SG_NK_F1) == adopt);
+        c = find(&out, SG_CMD_NOTIFY, SG_NK_F1);
+        SG_CHECK(adopt == 0 ||
+                 (c != NULL && c->a[5] == (SG_ACT_SLEEP | SG_ACT_SNOOZE | SG_NOTIFY_SILENT)));
+    }
+}
+
 #define CORE_RUN(fn)                                                         \
     do {                                                                     \
         sg_tz_set(TZ_BA);                                                    \
@@ -1013,4 +1653,21 @@ void run_core_tests(void) {
     CORE_RUN(test_core_reboot_late_one_f3);
     CORE_RUN(test_core_stale_f1_replans);
     CORE_RUN(test_core_snooze_three_posts);
+    CORE_RUN(test_v2_sleep_marks_handled);
+    CORE_RUN(test_v2_retap_updates);
+    CORE_RUN(test_v2_snooze_then_sleep);
+    CORE_RUN(test_v2_alarm_moved_after_logging);
+    CORE_RUN(test_v2_ui_bed_states);
+    CORE_RUN(test_v2_ui_hero);
+    CORE_RUN(test_v2_ui_remind);
+    CORE_RUN(test_v2_ui_week);
+    CORE_RUN(test_v2_ui_notif_flags);
+    CORE_RUN(test_v2_ui_flatten);
+    CORE_RUN(test_v2_reboot_repost);
+    CORE_RUN(test_v2_reboot_no_repost);
+    CORE_RUN(test_v2_reboot_snooze_pending);
+    CORE_RUN(test_v2_boot_unseen_then_broadcast);
+    CORE_RUN(test_v2_boot_unseen_not_persisted);
+    CORE_RUN(test_v2_early_sleep_keeps_f5_hint);
+    CORE_RUN(test_v2_boot_unseen_adopted_by_glue);
 }

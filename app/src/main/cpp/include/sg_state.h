@@ -54,6 +54,9 @@ typedef struct {
     uint8_t  ref_count;
     uint8_t  ref_head;
     int16_t  ref_mod[SG_REF_SAMPLES_MAX];
+
+    /* v2, NOT persisted: BOOT/PKG_REPLACED saw no alarm yet; rule R still owed (ADVICE-v2 section 4). */
+    uint8_t  boot_unseen;
 } SgState;
 
 /* Reset to factory defaults (SG_*_DEFAULT_*), empty log. Never fails. */
