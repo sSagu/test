@@ -1,7 +1,14 @@
 /* test_sleeplog.c - F4 sleep log ring buffer, weekly view, debt, F5 reference samples. */
 #include "sg_test.h"
+#include <string.h>
 
 #define TZ_BA "America/Argentina/Buenos_Aires"
+
+#define D_WED 20261007   /* Wednesday */
+#define D_THU 20261008   /* Thursday  */
+#define D_FRI 20261009   /* Friday    */
+#define D_SAT 20261010   /* Saturday  */
+#define D_SUN 20261011   /* Sunday    */
 
 /* bed_ms of the i-th record, or -1 if out of range */
 static int64_t bed_at(const SgState *s, int i) {
@@ -322,7 +329,252 @@ static void test_log_bed_retap(void) {
     SG_CHECK(bed_at(&s, 0) == bed);
 }
 
+/* ---- v3 manual night (docs/ADVICE-v3.md section 2): sg_log_attr_date, sg_log_put_manual ---- */
+
+/* est_sleep_min of the i-th record, or -2 if out of range */
+static int32_t est_at(const SgState *s, int i) {
+    const SgNight *n = sg_log_at(s, i);
+    return n == NULL ? -2 : sg_log_est_sleep_min(n);
+}
+
+/* wake_ms of the i-th record, or -1 if out of range */
+static int64_t wake_at(const SgState *s, int i) {
+    const SgNight *n = sg_log_at(s, i);
+    return n == NULL ? -1 : n->wake_ms;
+}
+
+/* Byte-identical persisted image (sg_store_encode of both states). */
+static int same_image(const SgState *a, const SgState *b) {
+    uint8_t ia[SG_STORE_SIZE];
+    uint8_t ib[SG_STORE_SIZE];
+    sg_store_encode(a, ia);
+    sg_store_encode(b, ib);
+    return memcmp(ia, ib, SG_STORE_SIZE) == 0;
+}
+
+static void test_manual_attr_date(void) {
+    SgNight n;
+    sg_tz_set(TZ_BA);
+    n.bed_ms = sg_at(D_FRI, 1380);
+    n.wake_ms = sg_at(D_SAT, 420);
+    n.closed = 1;
+    SG_CHECK(sg_log_attr_date(&n) == D_SAT);            /* wake date */
+    n.wake_ms = 0;
+    SG_CHECK(sg_log_attr_date(&n) == D_SAT);            /* bed + 12 h = Sat 11:00 */
+    n.bed_ms = sg_at(D_THU, 1380);
+    SG_CHECK(sg_log_attr_date(&n) == D_FRI);            /* bed + 12 h = Fri 11:00 */
+    SG_CHECK(sg_log_attr_date(NULL) == 0);
+}
+
+static void test_manual_insert(void) {
+    SgState s;
+    SgWeek w;
+    const SgNight *n;
+    int64_t wake;
+    sg_tz_set(TZ_BA);
+    wake = sg_at(D_SAT, 420);
+    sg_state_defaults(&s);
+    sg_ref_add(&s, 430);
+    sg_ref_add(&s, 430);
+    sg_ref_add(&s, 430);
+    SG_CHECK(sg_log_put_manual(&s, D_SAT, 360) == 1);
+    SG_CHECK(s.night_count == 1);
+    n = sg_log_at(&s, 0);
+    SG_CHECK(n != NULL && n->wake_ms == wake);
+    SG_CHECK(n != NULL && n->bed_ms == wake - SG_MIN_TO_MS(380));   /* 360 + SG_LATENCY_MIN */
+    SG_CHECK(n != NULL && n->closed == 1);
+    SG_CHECK(est_at(&s, 0) == 360);
+    SG_CHECK(s.ref_count == 3 && sg_ref_median(&s) == 430);         /* F5 untouched */
+    sg_log_week(&s, D_SAT, &w);
+    SG_CHECK(w.night[6].date == D_SAT && w.night[6].status == 1);
+    SG_CHECK(w.night[6].est_sleep_min == 360);
+    SG_CHECK(w.debt_min == 120 && w.logged_count == 1);             /* target 480 - 360 */
+}
+
+static void test_manual_args(void) {
+    SgState s;
+    SgState snap;
+    sg_tz_set(TZ_BA);
+    sg_state_defaults(&s);
+    (void)sg_log_bed_tap(&s, sg_at(D_THU, 1380), sg_at(D_FRI, 420));
+    snap = s;
+    SG_CHECK(sg_log_put_manual(NULL, D_SAT, 360) == -1);
+    SG_CHECK(sg_log_put_manual(&s, D_SAT, 59) == -1);
+    SG_CHECK(sg_log_put_manual(&s, D_SAT, 841) == -1);
+    SG_CHECK(sg_log_put_manual(&s, 20261332, 360) == -1);
+    SG_CHECK(sg_log_put_manual(&s, 0, 360) == -1);
+    SG_CHECK(s.night_count == snap.night_count);
+    SG_CHECK(same_image(&s, &snap));
+}
+
+static void test_manual_bounds(void) {
+    SgState s;
+    sg_tz_set(TZ_BA);
+    sg_state_defaults(&s);
+    SG_CHECK(sg_log_put_manual(&s, D_SAT, 60) == 1);
+    SG_CHECK(est_at(&s, 0) == 60);
+    SG_CHECK(sg_log_put_manual(&s, D_SAT, 840) == 2);
+    SG_CHECK(s.night_count == 1 && est_at(&s, 0) == 840);
+}
+
+static void test_manual_replace(void) {
+    SgState s;
+    SgWeek w;
+    sg_tz_set(TZ_BA);
+    sg_state_defaults(&s);
+    /* closed tap record waking Fri 07:00 */
+    (void)sg_log_bed_tap(&s, sg_at(D_THU, 1380), sg_at(D_FRI, 420));
+    SG_CHECK(sg_log_close_if_due(&s, sg_at(D_FRI, 420)) == 1);
+    SG_CHECK(sg_log_put_manual(&s, D_FRI, 420) == 2);
+    SG_CHECK(s.night_count == 1 && est_at(&s, 0) == 420);
+    SG_CHECK(s.night_count == 1 && sg_log_at(&s, 0)->closed == 1);
+    /* a second closed record for Fri (wake 07:10): only the NEWEST Fri record is overwritten */
+    (void)sg_log_bed_tap(&s, sg_at(D_THU, 1200), sg_at(D_FRI, 430));
+    SG_CHECK(sg_log_close_if_due(&s, sg_at(D_FRI, 430)) == 1);
+    SG_CHECK(s.night_count == 2);
+    SG_CHECK(sg_log_put_manual(&s, D_FRI, 300) == 2);
+    SG_CHECK(s.night_count == 2 && est_at(&s, 0) == 420 && est_at(&s, 1) == 300);
+    /* open record without wake (attributed to Sat 11:00 via bed + 12 h): overwritten, status 1 */
+    (void)sg_log_bed_tap(&s, sg_at(D_FRI, 1380), 0);
+    SG_CHECK(s.night_count == 3);
+    SG_CHECK(sg_log_put_manual(&s, D_SAT, 360) == 2);
+    SG_CHECK(s.night_count == 3);
+    sg_log_week(&s, D_SAT, &w);
+    SG_CHECK(w.night[6].status == 1 && w.night[6].est_sleep_min == 360);
+}
+
+static void test_manual_order(void) {
+    SgState s;
+    sg_tz_set(TZ_BA);
+    sg_state_defaults(&s);
+    (void)sg_log_bed_tap(&s, sg_at(D_WED, 1380), sg_at(D_THU, 420));
+    SG_CHECK(sg_log_close_if_due(&s, sg_at(D_THU, 420)) == 1);
+    (void)sg_log_bed_tap(&s, sg_at(D_FRI, 1380), sg_at(D_SAT, 420));
+    SG_CHECK(sg_log_close_if_due(&s, sg_at(D_SAT, 420)) == 1);
+    SG_CHECK(sg_log_put_manual(&s, D_FRI, 400) == 1);
+    SG_CHECK(s.night_count == 3);
+    SG_CHECK(wake_at(&s, 0) == sg_at(D_THU, 420));
+    SG_CHECK(wake_at(&s, 1) == sg_at(D_FRI, 420));
+    SG_CHECK(wake_at(&s, 2) == sg_at(D_SAT, 420));
+    SG_CHECK(est_at(&s, 1) == 400);
+}
+
+/* An open record (tonight's bed, waking Sun) stays the newest after a manual insert. */
+static void test_manual_keeps_open_newest(void) {
+    SgState s;
+    int64_t T;
+    int64_t bed;
+    int64_t T2;
+    sg_tz_set(TZ_BA);
+    T = sg_at(D_SUN, 420);
+    bed = sg_at(D_SAT, 1380);
+    T2 = T + SG_MIN_TO_MS(30);
+    sg_state_defaults(&s);
+    (void)sg_log_bed_tap(&s, bed, T);
+    SG_CHECK(sg_log_put_manual(&s, D_SAT, 360) == 1);
+    SG_CHECK(s.night_count == 2);
+    SG_CHECK(sg_log_open_bed_for(&s, T) == bed);
+    SG_CHECK(s.night_count == 2 && sg_log_at(&s, 1)->closed == 0);
+    sg_log_follow_alarm(&s, T2);
+    SG_CHECK(sg_log_open_bed_for(&s, T2) == bed);
+    SG_CHECK(wake_at(&s, 1) == T2);
+    /* the manual record is untouched by the follow */
+    SG_CHECK(wake_at(&s, 0) == sg_at(D_SAT, 420) && est_at(&s, 0) == 360);
+    SG_CHECK(s.night_count == 2 && sg_log_at(&s, 0)->closed == 1);
+}
+
+/* An open record waking on the same date is overwritten and closed (the user chose it). */
+static void test_manual_replace_open_same_date(void) {
+    SgState s;
+    int64_t T;
+    sg_tz_set(TZ_BA);
+    T = sg_at(D_SAT, 450);           /* open record waking Sat 07:30 */
+    sg_state_defaults(&s);
+    (void)sg_log_bed_tap(&s, sg_at(D_FRI, 1380), T);
+    SG_CHECK(sg_log_put_manual(&s, D_SAT, 360) == 2);
+    SG_CHECK(s.night_count == 1 && sg_log_at(&s, 0)->closed == 1);
+    SG_CHECK(est_at(&s, 0) == 360 && wake_at(&s, 0) == sg_at(D_SAT, 420));
+    SG_CHECK(sg_log_open_bed_for(&s, T) == 0);
+}
+
+/* Ring full (90): the oldest record is evicted and the new one is found. */
+static void test_manual_ring_full(void) {
+    SgState s;
+    SgWeek w;
+    int64_t base;
+    int64_t bed = 0;
+    int64_t T = 0;
+    int i;
+    sg_tz_set(TZ_BA);
+    base = sg_at(20261001, 0);
+    /* newest record closed */
+    sg_state_defaults(&s);
+    for (i = 0; i < SG_LOG_RETAIN_NIGHTS; i++) {
+        bed = base + SG_MIN_TO_MS(120 * i);
+        T = bed + SG_MIN_TO_MS(540);
+        (void)sg_log_bed_tap(&s, bed, T);
+        (void)sg_log_close_if_due(&s, T);
+    }
+    SG_CHECK(s.night_count == SG_LOG_RETAIN_NIGHTS);
+    SG_CHECK(sg_log_put_manual(&s, D_SAT, 360) == 1);
+    SG_CHECK(s.night_count == SG_LOG_RETAIN_NIGHTS);
+    SG_CHECK(bed_at(&s, 0) == base + SG_MIN_TO_MS(120));          /* i = 0 evicted */
+    SG_CHECK(wake_at(&s, SG_LOG_RETAIN_NIGHTS - 1) == sg_at(D_SAT, 420));
+    SG_CHECK(est_at(&s, SG_LOG_RETAIN_NIGHTS - 1) == 360);
+    sg_log_week(&s, D_SAT, &w);
+    SG_CHECK(w.night[6].status == 1 && w.night[6].est_sleep_min == 360);
+
+    /* newest record open (the last bed, waking at T): it stays the newest */
+    sg_state_defaults(&s);
+    for (i = 0; i < SG_LOG_RETAIN_NIGHTS; i++) {
+        bed = base + SG_MIN_TO_MS(120 * i);
+        T = bed + SG_MIN_TO_MS(540);
+        (void)sg_log_bed_tap(&s, bed, T);
+        if (i < SG_LOG_RETAIN_NIGHTS - 1) {
+            (void)sg_log_close_if_due(&s, T);
+        }
+    }
+    SG_CHECK(s.night_count == SG_LOG_RETAIN_NIGHTS);
+    SG_CHECK(sg_log_put_manual(&s, D_SAT, 360) == 1);
+    SG_CHECK(s.night_count == SG_LOG_RETAIN_NIGHTS);
+    SG_CHECK(bed_at(&s, 0) == base + SG_MIN_TO_MS(120));
+    SG_CHECK(sg_log_open_bed_for(&s, T) == bed);                  /* open record still newest */
+    SG_CHECK(s.night_count == SG_LOG_RETAIN_NIGHTS && sg_log_at(&s, SG_LOG_RETAIN_NIGHTS - 1)->closed == 0);
+    SG_CHECK(est_at(&s, SG_LOG_RETAIN_NIGHTS - 2) == 360);        /* manual sits just before it */
+    SG_CHECK(wake_at(&s, SG_LOG_RETAIN_NIGHTS - 2) == sg_at(D_SAT, 420));
+}
+
+/* Madrid DST: the night of a fall-back and of a spring-forward date is still exactly N min. */
+static void dst_case(int32_t date) {
+    SgState s;
+    SgWeek w;
+    sg_state_defaults(&s);
+    SG_CHECK(sg_log_put_manual(&s, date, 360) == 1);
+    SG_CHECK(s.night_count == 1 && est_at(&s, 0) == 360);
+    SG_CHECK(s.night_count == 1 && sg_log_attr_date(sg_log_at(&s, 0)) == date);
+    SG_CHECK(s.night_count == 1 &&
+             sg_log_at(&s, 0)->bed_ms == sg_log_at(&s, 0)->wake_ms - SG_MIN_TO_MS(380));
+    sg_log_week(&s, date, &w);
+    SG_CHECK(w.night[6].date == date && w.night[6].est_sleep_min == 360);
+}
+
+static void test_manual_dst(void) {
+    sg_tz_set("Europe/Madrid");
+    dst_case(20261025);      /* fall back: 03:00 CEST -> 02:00 CET */
+    dst_case(20270328);      /* spring forward: 02:00 CET -> 03:00 CEST */
+}
+
 void run_sleeplog_tests(void) {
+    SG_RUN(test_manual_attr_date);
+    SG_RUN(test_manual_insert);
+    SG_RUN(test_manual_args);
+    SG_RUN(test_manual_bounds);
+    SG_RUN(test_manual_replace);
+    SG_RUN(test_manual_order);
+    SG_RUN(test_manual_keeps_open_newest);
+    SG_RUN(test_manual_replace_open_same_date);
+    SG_RUN(test_manual_ring_full);
+    SG_RUN(test_manual_dst);
     SG_RUN(test_log_bed_tap_adds);
     SG_RUN(test_log_dedup_window);
     SG_RUN(test_log_follow_and_close);

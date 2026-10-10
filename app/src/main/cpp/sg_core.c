@@ -435,10 +435,19 @@ int sg_core_sync(SgState *s, const SgObs *o, int reason, SgCmdList *out)
             sg_log_follow_alarm(s, T);
 
             if (logged_for(s, T)) {
-                /* Rule L: the open record already belongs to T. F1/F2 were cancelled above. */
+                /* Rule L: the open record already belongs to T. F1/F2 were cancelled above.
+                 * F1 will never fire for the new T, so re-arm the weekend hint that the
+                 * SLEEP action would have armed (R2-C2 survives a moved alarm). */
+                int32_t delta = 0;
+
                 mark_handled(s, T);
                 if (pending) {
                     sg_cmd_cancel_alarm(out, SG_ALARM_DEBOUNCE);
+                }
+                if (has_flag(s, SG_FLAG_JETLAG_ON) && s->last_f5_for_T != T &&
+                    weekend_drift(s, T, &delta)) {
+                    sg_cmd_schedule(out, SG_ALARM_F5_HINT, now + SG_F5_AFTER_F1_MIN * SG_MS_PER_MIN,
+                                    SG_SCHED_EXACT_IDLE);
                 }
             } else if (now < f1) {
                 s->last_f1_for_T = 0;
@@ -484,10 +493,13 @@ int sg_core_sync(SgState *s, const SgObs *o, int reason, SgCmdList *out)
         }
         /* Rule R owed by an earlier BOOT/PKG_REPLACED is settled by this OK sync. */
         s->boot_unseen = 0;
-    } else if ((reason == SG_REASON_BOOT || reason == SG_REASON_PKG_REPLACED) &&
-               o->next_alarm_ms == 0 && s->last_seen_T != 0) {
-        /* Alarm list not rebuilt yet after boot: keep T's state; the broadcast that follows
-         * applies rule R (ADVICE-v2 section 4). */
+    } else if ((reason == SG_REASON_BOOT || reason == SG_REASON_PKG_REPLACED ||
+                s->boot_unseen) &&
+               o->next_alarm_ms == 0 && s->last_seen_T != 0 && now < s->last_seen_T) {
+        /* Alarm list not rebuilt yet after boot: keep T's state; the next relevant sync (the
+         * broadcast that follows) applies rule R (ADVICE-v2 section 4). While the owed re-post
+         * is pending, any null-list sync keeps the state too (V2-R1: an APP_OPEN before the
+         * clock app re-registers must not drop it). Once T has passed, nothing is owed. */
         s->boot_unseen = 1;
     } else {
         /* No relevant alarm: cancel F1/F2/F5 hint and their notifications. */
@@ -495,6 +507,7 @@ int sg_core_sync(SgState *s, const SgObs *o, int reason, SgCmdList *out)
             sg_log_follow_alarm(s, 0);
         }
         s->last_seen_T = 0;
+        s->boot_unseen = 0;
         if (has_flag(s, SG_FLAG_F1_POSTED)) {
             sg_cmd_cancel_notify(out, SG_NK_F1);
         }
@@ -884,6 +897,47 @@ int32_t sg_core_get(const SgState *s, int key)
     }
 }
 
+/* ------------------------------------------------------ v3 manual night */
+
+int sg_core_log_night(SgState *s, const SgObs *o, int32_t date, int32_t minutes,
+                      SgCmdList *out)
+{
+    Loc today;
+    int k;
+    int known = 0;
+
+    if (out == NULL) {
+        return SG_E_ARG;
+    }
+    sg_cmd_init(out);
+    if (s == NULL || o == NULL || !in_range_ms(o->now_ms)) {
+        return SG_E_ARG;
+    }
+    today = loc_of(o->now_ms);
+    if (!today.ok || today.date == 0) {
+        return SG_E_ARG;
+    }
+    for (k = -(SG_DEBT_WINDOW_NIGHTS - 1); k <= 0; k++) {
+        if (sg_time_date_add(today.date, k) == date) {
+            known = 1;
+            break;
+        }
+    }
+    if (!known) {
+        return SG_E_ARG;
+    }
+    if (minutes < SG_MANUAL_MIN_MIN) {
+        minutes = SG_MANUAL_MIN_MIN;
+    }
+    if (minutes > SG_MANUAL_MAX_MIN) {
+        minutes = SG_MANUAL_MAX_MIN;
+    }
+    if (sg_log_put_manual(s, date, minutes) < 0) {
+        return SG_E_ARG;
+    }
+    return SG_OK;
+}
+
 /* ----------------------------------------------------------- UI model */
 
 /* hero (ADVICE-v2 section 3): DISABLED first, then by relevance; a relevant alarm whose
@@ -1014,6 +1068,43 @@ static void ui_v2(const SgState *s, const SgObs *o, int rel, int64_t T, SgUiMode
     out->label_night = label;
 }
 
+/* v3 manual-night fields (ADVICE-v3 section 3). Runs after sg_log_week fills out->week. */
+static void ui_v3(SgUiModel *out)
+{
+    int i;
+    int32_t est;
+    int32_t prev;
+    int wd;
+    const SgNightView *nv;
+
+    out->manual_ok = (out->week.night[SG_DEBT_WINDOW_NIGHTS - 1].date != 0) ? 1 : 0;
+    out->manual_min = SG_MANUAL_MIN_MIN;
+    out->manual_max = SG_MANUAL_MAX_MIN;
+    out->manual_step = SG_MANUAL_STEP_MIN;
+    for (i = 0; i < SG_DEBT_WINDOW_NIGHTS; i++) {
+        nv = &out->week.night[i];
+        out->manual_default[i] = SG_MANUAL_DEFAULT_MIN;
+        if (nv->status == 1) {
+            est = (int32_t)nv->est_sleep_min;
+            if (est < SG_MANUAL_MIN_MIN) {
+                est = SG_MANUAL_MIN_MIN;
+            }
+            if (est > SG_MANUAL_MAX_MIN) {
+                est = SG_MANUAL_MAX_MIN;
+            }
+            out->manual_default[i] = est;
+        }
+        out->manual_prev_wday[i] = -1;
+        if (nv->date != 0) {
+            prev = sg_time_date_add(nv->date, -1);
+            wd = (prev == SG_TIME_ERR) ? SG_TIME_ERR : sg_time_wday(prev);
+            if (wd != SG_TIME_ERR) {
+                out->manual_prev_wday[i] = (int32_t)wd;
+            }
+        }
+    }
+}
+
 int sg_core_ui(const SgState *s, const SgObs *o, SgUiModel *out)
 {
     int rel;
@@ -1091,6 +1182,7 @@ int sg_core_ui(const SgState *s, const SgObs *o, SgUiModel *out)
     }
 
     (void)sg_log_week(s, today.date, &out->week);
+    ui_v3(out);
 
     for (key = 1; key <= 11; key++) {
         out->settings[key] = sg_core_get(s, key);
@@ -1152,6 +1244,16 @@ void sg_core_ui_flatten(const SgUiModel *m, int64_t out[SG_UI_LEN])
     out[SG_UI_LABEL_NIGHT] = m->label_night;
     for (i = 0; i < SG_DEBT_WINDOW_NIGHTS; i++) {
         out[SG_UI_BARS + i] = m->bar_permille[i];
+    }
+
+    /* v3 (ADVICE-v3 section 3) */
+    out[SG_UI_MANUAL_OK] = m->manual_ok;
+    out[SG_UI_MANUAL_MIN] = m->manual_min;
+    out[SG_UI_MANUAL_MAX] = m->manual_max;
+    out[SG_UI_MANUAL_STEP] = m->manual_step;
+    for (i = 0; i < SG_DEBT_WINDOW_NIGHTS; i++) {
+        out[SG_UI_MANUAL_DEFAULT + i] = m->manual_default[i];
+        out[SG_UI_MANUAL_PREV_WDAY + i] = m->manual_prev_wday[i];
     }
 }
 

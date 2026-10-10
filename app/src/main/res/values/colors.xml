@@ -41,6 +41,9 @@
     <color name="sg_switch_off">#3A3A42</color>
     <color name="sg_thumb_off">#C8C8D0</color>
 
+    <!-- v3 bottom sheet -->
+    <color name="sg_sheet">#1A1A1D</color>
+
     <!-- ripples -->
     <color name="sg_ripple">#33FFFFFF</color>
     <color name="sg_ripple_on_accent">#330B1A33</color>

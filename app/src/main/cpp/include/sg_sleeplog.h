@@ -62,6 +62,31 @@ typedef struct {
 
 void sg_log_week(const SgState *s, int32_t today_date, SgWeek *out);
 
+/* ---- v3 manual night (docs/ADVICE-v3.md section 2 is the authority) ---- */
+
+/* Local calendar date (yyyymmdd) a record is attributed to: the date of wake_ms when
+ * wake_ms > 0, else the date of bed_ms + 12 h (exactly the rule sg_log_week uses).
+ * 0 for NULL or when the local time cannot be computed. */
+int32_t sg_log_attr_date(const SgNight *n);
+
+/* Store a manual night of `minutes` for wake date `date` (yyyymmdd).
+ *  Precondition (else return -1, state untouched): s != NULL, SG_MANUAL_MIN_MIN <= minutes <=
+ *  SG_MANUAL_MAX_MIN, wake = sg_time_from_local(date, SG_MANUAL_WAKE_MOD) != SG_TIME_ERR and
+ *  the local date of wake == date. bed = wake - (minutes + SG_LATENCY_MIN) min (int64 ms math,
+ *  so sg_log_est_sleep_min() of the record == minutes exactly, across DST too).
+ *  Replace: if any record i has sg_log_attr_date == date, take the NEWEST such record (largest
+ *  logical i) and overwrite it in place: bed_ms, wake_ms, closed = 1. Return 2. This also
+ *  closes an open record that wakes on `date` (the user chose to overwrite that night).
+ *  Insert (no record for date): if the ring is full, evict the oldest record first (head + 1,
+ *  count - 1). Then p = count; if count > 0 and the newest record is open (closed == 0), p =
+ *  count - 1 (an open record always stays newest: sg_log_open_bed_for / follow_alarm / retap
+ *  keep working). Then while p > 0 and attr_ms(record p-1) > wake: p--, where attr_ms =
+ *  wake_ms if > 0 else bed_ms + 12 h (keeps the ring chronological). Shift logical records
+ *  p..count-1 up by one (from the top down), write {bed, wake, closed = 1} at p, count + 1.
+ *  Return 1.
+ *  Never touches ref samples, scheduler fields or flags. No recursion, no heap. */
+int sg_log_put_manual(SgState *s, int32_t date, int32_t minutes);
+
 /* Erase all nights and reference samples. */
 void sg_log_clear(SgState *s);
 

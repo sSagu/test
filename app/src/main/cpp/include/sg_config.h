@@ -58,6 +58,13 @@
 #define SG_RECHECK_MIN               60    /* inexact safety re-read (features advisor) */
 #define SG_MAX_OPPORTUNITY_MIN       960   /* clamp bed->wake to 16 h when computing est_sleep */
 
+/* ---- v3 manual night (docs/ADVICE-v3.md, features section 9) ---- */
+#define SG_MANUAL_MIN_MIN            60    /* "Dormiste" lower bound (1 h) */
+#define SG_MANUAL_MAX_MIN            840   /* upper bound (14 h); 840 + latency <= SG_MAX_OPPORTUNITY_MIN */
+#define SG_MANUAL_STEP_MIN           15    /* stepper increment only; C stores any value in range */
+#define SG_MANUAL_DEFAULT_MIN        360   /* draft for a night without a record (approved mockup) */
+#define SG_MANUAL_WAKE_MOD           420   /* 07:00 local: synthetic wake of a manual record */
+
 /* ---- notification ids (Java uses the same values) ---- */
 #define SG_NOTIF_ID_F1               1001
 #define SG_NOTIF_ID_F2               1002

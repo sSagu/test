@@ -147,4 +147,21 @@
     <string name="str_cd_winddown_plus">Subir 15 minutos la anticipación</string>
     <string name="str_step_minus">−</string>
     <string name="str_step_plus">+</string>
+
+    <!-- ===================== v3 manual night (docs/ADVICE-v3.md) ===================== -->
+    <string name="str_manual_link">Anotar una noche a mano</string>
+    <string name="str_manual_title">Anotar una noche a mano</string>
+    <string name="str_manual_sub">Para las noches que no anotaste con el botón.</string>
+    <!-- %1$s = fmtDate ("sáb 10/10") -->
+    <string name="str_manual_date_today">hoy, %1$s</string>
+    <!-- %1$s = weekday before, %2$s = weekday of the night (str_wday_short) -->
+    <string name="str_manual_night_span">noche del %1$s al %2$s</string>
+    <string name="str_manual_slept">Dormiste</string>
+    <string name="str_manual_note">Cuenta como sueño en el gráfico y en la deuda de la semana. Si esa noche ya estaba anotada, la reemplaza.</string>
+    <string name="str_btn_save">Guardar</string>
+    <string name="str_cd_manual_prev">Noche anterior</string>
+    <string name="str_cd_manual_next">Noche siguiente</string>
+    <!-- %1$d = UI_MANUAL_STEP -->
+    <string name="str_cd_manual_minus">%1$d minutos menos</string>
+    <string name="str_cd_manual_plus">%1$d minutos más</string>
 </resources>

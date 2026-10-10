@@ -106,8 +106,14 @@ Nothing else changes (cooldown, samples, last_notified_ms). Command budget uncha
 **Owed re-post (C3 fix, `sg_state.h` field `boot_unseen`, not persisted).** BOOT/PKG_REPLACED with no next
 alarm (`getNextAlarmClock()` null because the clock app has not re-registered yet) and `last_seen_T != 0`
 keeps T's state (no cancels, no `last_seen_T = 0`) and sets `boot_unseen`. The next relevant sync with T
-unchanged runs rule R with reason BOOT, so the broadcast that follows re-posts the unanswered F1. Any OK sync
-clears the flag. The flag only lives in memory; a process death drops it (accepted). The JNI glue
+unchanged runs rule R with reason BOOT, so the broadcast that follows re-posts the unanswered F1 (or re-arms a
+pending snooze). Any OK sync clears the flag.
+
+While the flag is set, every sync that has no relevant alarm (APP_OPEN, RECHECK, SETTING, a BROADCAST with an
+empty list, ...) keeps T's state and the flag, as long as `now < last_seen_T` (V2-R1). The app can be opened after
+unlocking, before the clock app re-registers its alarm, so an APP_OPEN with an empty list must not drop the owed
+re-post. Once T has passed, nothing is owed: such a sync takes the normal "no relevant alarm" branch (F1/F2/F5
+cancelled, `last_seen_T = 0`, flag cleared). The flag only lives in memory; a process death drops it (accepted). The JNI glue
 (`sg_jni.c` mutate) adopts the work state on every SG_OK call and writes the file only when the encoded
 image changed, so an in-memory-only flag such as `boot_unseen` is never lost (R2-C1).
 

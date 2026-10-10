@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- v3 grab handle: 32 x 4 dp, #3A3A42, radius 2. Decorative. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="@color/sg_outline" />
+    <corners android:radius="2dp" />
+    <size android:width="@dimen/sg_sheet_handle_w" android:height="@dimen/sg_sheet_handle_h" />
+</shape>

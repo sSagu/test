@@ -11,6 +11,7 @@
 #define D_SAT 20261010   /* Saturday */
 #define D_SUN 20261011   /* Sunday   */
 #define D_MON 20261012   /* Monday   */
+#define D_WED 20261007   /* Wednesday */
 
 #define DEBOUNCE_MS ((int64_t)SG_DEBOUNCE_S * SG_MS_PER_S)
 
@@ -710,7 +711,7 @@ static void test_core_ui_none_and_flatten(void) {
     int64_t buf[SG_UI_LEN];
     int64_t T = sg_at(D_FRI, 420);
     sg_tz_set(TZ_BA);
-    _Static_assert(SG_UI_LEN == 85, "UI layout size");
+    _Static_assert(SG_UI_LEN == 103, "UI layout size");
     sg_state_defaults(&s);
     o = obs(sg_at(D_THU, 1200), 0, SG_CREATOR_NONE);
     SG_CHECK(sg_core_ui(&s, &o, &m) == SG_OK);
@@ -1315,7 +1316,7 @@ static void test_v2_ui_flatten(void) {
     int64_t buf[SG_UI_LEN];
     int i;
     int64_t T = sg_at(D_FRI, 420);
-    _Static_assert(SG_UI_BARS + SG_DEBT_WINDOW_NIGHTS == SG_UI_LEN, "bars end the model");
+    _Static_assert(SG_UI_BARS + SG_DEBT_WINDOW_NIGHTS == SG_UI_MANUAL_OK, "bars end the v2 block");
     sg_state_defaults(&s);
     o = obs(sg_at(D_THU, 1200), T, SG_CREATOR_ALLOWED);           /* 20:00 */
     ui_at(&s, &o, &m);
@@ -1567,6 +1568,66 @@ static void test_v2_early_sleep_keeps_f5_hint(void) {
     SG_CHECK(find(&out, SG_CMD_SCHEDULE, SG_ALARM_F5_HINT) == NULL);
 }
 
+/* V2-F5-1: an early in-app tap arms the weekend hint (R2-C2). If the alarm then moves while
+ * still on the weekend, the open record follows T (rule L) and F1 never fires for the new T,
+ * so the T-changed branch must re-arm the hint. Ref 07:00 x3, T Sat 10:30 -> Sat 10:45. */
+static void test_v2_moved_alarm_keeps_f5_hint(void) {
+    SgState s;
+    SgCmdList out;
+    SgObs o;
+    const SgCmd *c;
+    int64_t T = sg_at(D_SAT, 630);
+    int64_t T2 = sg_at(D_SAT, 645);
+    int64_t tap = sg_at(D_FRI, 1410);                     /* Friday 23:30 */
+    int64_t moved = tap + 20 * SG_MS_PER_S;               /* the BROADCAST 20 s later */
+    int i;
+
+    sg_state_defaults(&s);
+    for (i = 0; i < 3; i++) {
+        sg_ref_add(&s, 420);
+    }
+    o = obs(sg_at(D_FRI, 1200), T, SG_CREATOR_ALLOWED);
+    SG_CHECK(sg_core_sync(&s, &o, SG_REASON_BROADCAST, &out) == SG_OK);
+    SG_CHECK(find(&out, SG_CMD_SCHEDULE, SG_ALARM_F1) != NULL);
+    o = obs(tap, T, SG_CREATOR_ALLOWED);
+    SG_CHECK(sg_core_action(&s, &o, SG_ACTION_SLEEP, &out) == SG_OK);
+    SG_CHECK(find(&out, SG_CMD_SCHEDULE, SG_ALARM_F5_HINT) != NULL);
+    SG_CHECK(s.last_f5_for_T == 0);
+
+    /* the alarm moves on the weekend: the hint must be re-armed for T2 */
+    o = obs(moved, T2, SG_CREATOR_ALLOWED);
+    SG_CHECK(sg_core_sync(&s, &o, SG_REASON_BROADCAST, &out) == SG_OK);
+    SG_CHECK(out.dropped == 0);
+    SG_CHECK(out.count <= SG_MAX_CMDS);
+    SG_CHECK(s.last_seen_T == T2);
+    SG_CHECK(s.last_f1_for_T == T2 && s.last_f2_for_T == T2);
+    SG_CHECK(find(&out, SG_CMD_CANCEL_ALARM, SG_ALARM_F5_HINT) != NULL);
+    c = find(&out, SG_CMD_SCHEDULE, SG_ALARM_F5_HINT);
+    SG_CHECK(c != NULL && c->a[1] == moved + SG_MIN_TO_MS(1) && c->a[2] == SG_SCHED_EXACT_IDLE);
+    SG_CHECK(find(&out, SG_CMD_SCHEDULE, SG_ALARM_F1) == NULL);
+
+    /* the re-armed hint fires for T2 once, with the drift from the same reference */
+    o = obs(moved + SG_MIN_TO_MS(1), T2, SG_CREATOR_ALLOWED);
+    SG_CHECK(sg_core_alarm_fired(&s, &o, SG_ALARM_F5_HINT, &out) == SG_OK);
+    SG_CHECK(count_notify(&out, SG_NK_F5) == 1);
+    c = find(&out, SG_CMD_NOTIFY, SG_NK_F5);
+    SG_CHECK(c != NULL && c->a[1] == SG_TXT_F5_ALARM && c->a[2] == 645);
+    SG_CHECK(s.last_f5_for_T == T2);
+
+    /* without an early tap the move arms nothing: F1 still owns T2 */
+    sg_state_defaults(&s);
+    for (i = 0; i < 3; i++) {
+        sg_ref_add(&s, 420);
+    }
+    o = obs(sg_at(D_FRI, 1200), T, SG_CREATOR_ALLOWED);
+    SG_CHECK(sg_core_sync(&s, &o, SG_REASON_BROADCAST, &out) == SG_OK);
+    o = obs(moved, T2, SG_CREATOR_ALLOWED);
+    SG_CHECK(sg_core_sync(&s, &o, SG_REASON_BROADCAST, &out) == SG_OK);
+    SG_CHECK(out.dropped == 0);
+    SG_CHECK(find(&out, SG_CMD_SCHEDULE, SG_ALARM_F5_HINT) == NULL);
+    SG_CHECK(find(&out, SG_CMD_SCHEDULE, SG_ALARM_F1) != NULL);
+}
+
 /* Mirror of the JNI glue's mutate() adopt policy (sg_jni.c is device-only, so the host cannot
  * link it). `adopt_always` 1 is the fixed glue; 0 is the old one that adopted only when the
  * encoded image changed. Returns whether the image changed (i.e. whether the file is written). */
@@ -1613,6 +1674,428 @@ static void test_v2_boot_unseen_adopted_by_glue(void) {
         SG_CHECK(adopt == 0 ||
                  (c != NULL && c->a[5] == (SG_ACT_SLEEP | SG_ACT_SNOOZE | SG_NOTIFY_SILENT)));
     }
+}
+
+/* V2-R1: BOOT with an empty alarm list, then APP_OPEN (REASON_APP_OPEN, list still empty), then
+ * the BROADCAST with T. The owed re-post must survive the APP_OPEN: no F1 is cancelled there, and
+ * the BROADCAST posts exactly one silent F1 (once; a later broadcast posts nothing). */
+static void test_v2_boot_unseen_app_open_null(void) {
+    SgState s;
+    SgCmdList out;
+    SgObs o;
+    const SgCmd *c;
+    int64_t T = sg_at(D_FRI, 420);
+
+    v2_posted_f1(&s, T);                                          /* F1 posted 21:30 */
+    o = obs(sg_at(D_THU, 1380), 0, SG_CREATOR_NONE);              /* BOOT 23:00 */
+    SG_CHECK(sg_core_sync(&s, &o, SG_REASON_BOOT, &out) == SG_OK);
+    SG_CHECK(s.boot_unseen == 1);
+    o = obs(sg_at(D_THU, 1381), 0, SG_CREATOR_NONE);              /* APP_OPEN 23:01, list empty */
+    SG_CHECK(sg_core_sync(&s, &o, SG_REASON_APP_OPEN, &out) == SG_OK);
+    SG_CHECK(out.dropped == 0);
+    SG_CHECK(count_notify(&out, SG_NK_F1) == 0);
+    SG_CHECK(find(&out, SG_CMD_CANCEL_NOTIFY, SG_NK_F1) == NULL);
+    SG_CHECK(s.boot_unseen == 1);
+    SG_CHECK(s.last_seen_T == T);
+    SG_CHECK((s.flags & SG_FLAG_F1_POSTED) != 0);
+    o = obs(sg_at(D_THU, 1382), T, SG_CREATOR_ALLOWED);           /* BROADCAST 23:02 */
+    SG_CHECK(sg_core_sync(&s, &o, SG_REASON_BROADCAST, &out) == SG_OK);
+    SG_CHECK(out.dropped == 0);
+    SG_CHECK(count_notify(&out, SG_NK_F1) == 1);
+    c = find(&out, SG_CMD_NOTIFY, SG_NK_F1);
+    SG_CHECK(c != NULL && c->a[5] == (SG_ACT_SLEEP | SG_ACT_SNOOZE | SG_NOTIFY_SILENT));
+    SG_CHECK(c != NULL && c->a[6] == SG_F1_TIMEOUT_MIN - 92);     /* 92 min since 21:30 */
+    SG_CHECK(s.boot_unseen == 0);
+    o = obs(sg_at(D_THU, 1383), T, SG_CREATOR_ALLOWED);
+    SG_CHECK(sg_core_sync(&s, &o, SG_REASON_BROADCAST, &out) == SG_OK);
+    SG_CHECK(count_notify(&out, SG_NK_F1) == 0);
+}
+
+/* V2-R1, snooze variant: SNOOZE at 21:35 (F1 due 21:50), reboot 21:37 with an empty list, an
+ * APP_OPEN at 21:38 still with an empty list, then the BROADCAST at 21:39. The lost snooze must
+ * be re-armed 15 min after that broadcast (21:54), not dropped. */
+static void test_v2_boot_unseen_app_open_snooze(void) {
+    SgState s;
+    SgCmdList out;
+    SgObs o;
+    const SgCmd *c;
+    int64_t T = sg_at(D_FRI, 420);
+
+    v2_posted_f1(&s, T);                                          /* F1 posted 21:30 */
+    o = obs(sg_at(D_THU, 1295), T, SG_CREATOR_ALLOWED);           /* SNOOZE 21:35 */
+    SG_CHECK(sg_core_action(&s, &o, SG_ACTION_SNOOZE, &out) == SG_OK);
+    SG_CHECK(s.snooze_count == 1 && (s.flags & SG_FLAG_F1_POSTED) == 0);
+    o = obs(sg_at(D_THU, 1297), 0, SG_CREATOR_NONE);              /* BOOT 21:37 */
+    SG_CHECK(sg_core_sync(&s, &o, SG_REASON_BOOT, &out) == SG_OK);
+    SG_CHECK(s.boot_unseen == 1);
+    o = obs(sg_at(D_THU, 1298), 0, SG_CREATOR_NONE);              /* APP_OPEN 21:38 */
+    SG_CHECK(sg_core_sync(&s, &o, SG_REASON_APP_OPEN, &out) == SG_OK);
+    SG_CHECK(s.boot_unseen == 1 && s.snooze_count == 1);
+    SG_CHECK(find(&out, SG_CMD_SCHEDULE, SG_ALARM_F1) == NULL);
+    o = obs(sg_at(D_THU, 1299), T, SG_CREATOR_ALLOWED);           /* BROADCAST 21:39 */
+    SG_CHECK(sg_core_sync(&s, &o, SG_REASON_BROADCAST, &out) == SG_OK);
+    SG_CHECK(out.dropped == 0);
+    SG_CHECK(count_notify(&out, SG_NK_F1) == 0);
+    c = find(&out, SG_CMD_SCHEDULE, SG_ALARM_F1);
+    SG_CHECK(c != NULL && c->a[1] == sg_at(D_THU, 1314) && c->a[2] == SG_SCHED_EXACT_IDLE);
+    SG_CHECK(s.boot_unseen == 0);
+    SG_CHECK((s.flags & SG_FLAG_F1_POSTED) == 0);
+}
+
+/* V2-R1 guard: the owed state is bounded by T. Once T has passed, a null-list sync drops it
+ * like any other "no relevant alarm" sync: F1 is cancelled, last_seen_T and the flag clear. */
+static void test_v2_boot_unseen_after_t_dropped(void) {
+    SgState s;
+    SgCmdList out;
+    SgObs o;
+    int64_t T = sg_at(D_FRI, 420);
+
+    v2_posted_f1(&s, T);
+    o = obs(sg_at(D_THU, 1380), 0, SG_CREATOR_NONE);              /* BOOT 23:00 */
+    SG_CHECK(sg_core_sync(&s, &o, SG_REASON_BOOT, &out) == SG_OK);
+    SG_CHECK(s.boot_unseen == 1 && s.last_seen_T == T);
+    o = obs(T + SG_MIN_TO_MS(30), 0, SG_CREATOR_NONE);            /* APP_OPEN 07:30, T passed */
+    SG_CHECK(sg_core_sync(&s, &o, SG_REASON_APP_OPEN, &out) == SG_OK);
+    SG_CHECK(out.dropped == 0);
+    SG_CHECK(find(&out, SG_CMD_CANCEL_NOTIFY, SG_NK_F1) != NULL);
+    SG_CHECK(s.boot_unseen == 0);
+    SG_CHECK(s.last_seen_T == 0);
+    SG_CHECK((s.flags & SG_FLAG_F1_POSTED) == 0);
+}
+
+/* V2-R1 through the glue: BOOT (empty list), APP_OPEN (empty list), BROADCAST, each step run
+ * through mirror_mutate. adopt 1 is the fixed glue: one silent re-post. adopt 0 (old policy)
+ * drops the in-memory flag at BOOT because the image does not change, so nothing is posted. */
+static void test_v2_boot_unseen_app_open_glue(void) {
+    SgState g;
+    SgState work;
+    SgObs o;
+    SgCmdList out;
+    const SgCmd *c;
+    int64_t T = sg_at(D_FRI, 420);
+    int adopt;
+
+    for (adopt = 0; adopt <= 1; adopt++) {
+        v2_posted_f1(&g, T);                                          /* F1 posted 21:30 */
+        o = obs(sg_at(D_THU, 1380), 0, SG_CREATOR_NONE);              /* BOOT 23:00 */
+        work = g;
+        SG_CHECK(sg_core_sync(&work, &o, SG_REASON_BOOT, &out) == SG_OK);
+        SG_CHECK(mirror_mutate(&g, &work, adopt) == 0);               /* image unchanged */
+        o = obs(sg_at(D_THU, 1381), 0, SG_CREATOR_NONE);              /* APP_OPEN 23:01 */
+        work = g;
+        SG_CHECK(sg_core_sync(&work, &o, SG_REASON_APP_OPEN, &out) == SG_OK);
+        (void)mirror_mutate(&g, &work, adopt);
+        SG_CHECK(adopt == 0 || g.boot_unseen == 1);
+        SG_CHECK(adopt == 0 || (g.flags & SG_FLAG_F1_POSTED) != 0);
+        o = obs(sg_at(D_THU, 1382), T, SG_CREATOR_ALLOWED);           /* BROADCAST 23:02 */
+        work = g;
+        SG_CHECK(sg_core_sync(&work, &o, SG_REASON_BROADCAST, &out) == SG_OK);
+        (void)mirror_mutate(&g, &work, adopt);
+        SG_CHECK(count_notify(&out, SG_NK_F1) == adopt);
+        c = find(&out, SG_CMD_NOTIFY, SG_NK_F1);
+        SG_CHECK(adopt == 0 ||
+                 (c != NULL && c->a[5] == (SG_ACT_SLEEP | SG_ACT_SNOOZE | SG_NOTIFY_SILENT)));
+        SG_CHECK(g.boot_unseen == 0);
+    }
+}
+
+/* ---- v3 manual night (docs/ADVICE-v3.md sections 2, 3, 6): sg_core_log_night, UI v3 ---- */
+
+/* sg_log_est_sleep_min of the i-th record, or -2 if out of range */
+static int32_t est_of(const SgState *s, int i) {
+    const SgNight *n = sg_log_at(s, i);
+    return n == NULL ? -2 : sg_log_est_sleep_min(n);
+}
+
+/* wake_ms of the i-th record, or -1 if out of range */
+static int64_t wake_of(const SgState *s, int i) {
+    const SgNight *n = sg_log_at(s, i);
+    return n == NULL ? -1 : n->wake_ms;
+}
+
+/* Byte-identical persisted image (sg_store_encode of both states). */
+static int core_same_image(const SgState *a, const SgState *b) {
+    uint8_t ia[SG_STORE_SIZE];
+    uint8_t ib[SG_STORE_SIZE];
+    sg_store_encode(a, ia);
+    sg_store_encode(b, ib);
+    return memcmp(ia, ib, SG_STORE_SIZE) == 0;
+}
+
+/* Every scheduler, flag, settings and F5 field that a manual night must leave alone. */
+static int sched_same(const SgState *a, const SgState *b) {
+    return a->flags == b->flags && a->snooze_count == b->snooze_count &&
+           a->lead_min == b->lead_min && a->target_sleep_min == b->target_sleep_min &&
+           a->winddown_min == b->winddown_min &&
+           a->last_seen_T == b->last_seen_T && a->last_f1_for_T == b->last_f1_for_T &&
+           a->last_f2_for_T == b->last_f2_for_T && a->last_f5_for_T == b->last_f5_for_T &&
+           a->last_notified_ms == b->last_notified_ms &&
+           a->debounce_due_ms == b->debounce_due_ms && a->debounce_T == b->debounce_T &&
+           a->last_f5_date == b->last_f5_date && a->boot_unseen == b->boot_unseen &&
+           a->ref_count == b->ref_count && a->ref_head == b->ref_head &&
+           memcmp(a->ref_mod, b->ref_mod, sizeof a->ref_mod) == 0;
+}
+
+/* The owner's case (features section 1): Sat 2026-10-10 07:00, "hoy, sáb 10/10,
+ * noche del vie al sáb: 6 h 00 min". Visible at once on the chart and in the debt. */
+static void test_v3_user_scenario(void) {
+    SgState s;
+    SgUiModel m;
+    SgObs o;
+    SgCmdList out;
+    int64_t buf[SG_UI_LEN];
+    int i;
+    sg_tz_set(TZ_BA);
+    sg_state_defaults(&s);
+    o = obs(sg_at(D_SAT, 420), 0, SG_CREATOR_NONE);
+    ui_at(&s, &o, &m);
+    SG_CHECK(m.week.night[6].date == D_SAT && m.week.night[6].wday == 6);
+    SG_CHECK(m.manual_ok == 1);
+    SG_CHECK(m.manual_default[6] == 360 && m.manual_prev_wday[6] == 5);
+    SG_CHECK(m.manual_min == 60 && m.manual_max == 840 && m.manual_step == 15);
+    SG_CHECK(sg_core_log_night(&s, &o, D_SAT, 360, &out) == SG_OK);
+    SG_CHECK(out.count == 0 && out.dropped == 0);
+    ui_at(&s, &o, &m);
+    SG_CHECK(m.week.night[6].status == 1 && m.week.night[6].est_sleep_min == 360);
+    SG_CHECK(m.bar_permille[6] == 600 && m.label_night == 6);
+    SG_CHECK(m.week.debt_min == 120 && m.debt_state == SG_DEBT_SOME);
+    SG_CHECK(m.week.logged_count == 1);
+    sg_core_ui_flatten(&m, buf);
+    SG_CHECK(buf[SG_UI_MANUAL_OK] == 1);
+    SG_CHECK(buf[SG_UI_BARS + 6] == 600 && buf[SG_UI_LABEL_NIGHT] == 6);
+    SG_CHECK(buf[SG_UI_DEBT_MIN] == 120 && buf[SG_UI_DEBT_STATE] == SG_DEBT_SOME);
+    SG_CHECK(buf[SG_UI_LOGGED_COUNT] == 1);
+    for (i = 0; i < SG_DEBT_WINDOW_NIGHTS; i++) {
+        SG_CHECK(buf[SG_UI_MANUAL_DEFAULT + i] == m.manual_default[i]);
+        SG_CHECK(buf[SG_UI_MANUAL_PREV_WDAY + i] == m.manual_prev_wday[i]);
+    }
+    SG_CHECK(buf[SG_UI_MANUAL_DEFAULT + 6] == 360 && buf[SG_UI_MANUAL_PREV_WDAY + 6] == 5);
+    /* the same entry saved at 06:40 (wake still ahead): same result */
+    sg_state_defaults(&s);
+    o = obs(sg_at(D_SAT, 400), 0, SG_CREATOR_NONE);
+    SG_CHECK(sg_core_log_night(&s, &o, D_SAT, 360, &out) == SG_OK);
+    SG_CHECK(out.count == 0);
+    ui_at(&s, &o, &m);
+    SG_CHECK(m.week.night[6].status == 1 && m.week.night[6].est_sleep_min == 360);
+    SG_CHECK(m.week.debt_min == 120 && m.bar_permille[6] == 600);
+}
+
+/* Argument checks: refused calls leave the image unchanged and out empty; minutes are
+ * clamped to [60, 840] and never rounded. */
+static void test_v3_args(void) {
+    SgState s;
+    SgState snap;
+    SgObs o;
+    SgObs bad;
+    SgCmdList out;
+    int64_t now = sg_at(D_SAT, 420);
+    sg_tz_set(TZ_BA);
+    sg_state_defaults(&s);
+    o = obs(now, 0, SG_CREATOR_NONE);
+    bad = obs(-1, 0, SG_CREATOR_NONE);
+    SG_CHECK(sg_core_log_night(NULL, &o, D_SAT, 360, &out) == SG_E_ARG);
+    SG_CHECK(sg_core_log_night(&s, NULL, D_SAT, 360, &out) == SG_E_ARG);
+    SG_CHECK(sg_core_log_night(&s, &o, D_SAT, 360, NULL) == SG_E_ARG);
+    SG_CHECK(sg_core_log_night(&s, &bad, D_SAT, 360, &out) == SG_E_ARG);   /* now out of range */
+    snap = s;
+    out.count = 3;                                                        /* must be reset */
+    SG_CHECK(sg_core_log_night(&s, &o, D_SUN, 360, &out) == SG_E_ARG);     /* tomorrow */
+    SG_CHECK(out.count == 0);
+    SG_CHECK(sg_core_log_night(&s, &o, sg_time_date_add(D_SAT, -7), 360, &out) == SG_E_ARG);
+    SG_CHECK(sg_core_log_night(&s, &o, 0, 360, &out) == SG_E_ARG);
+    SG_CHECK(sg_core_log_night(&s, &o, 20261332, 360, &out) == SG_E_ARG);
+    SG_CHECK(core_same_image(&s, &snap));
+
+    /* minutes: clamp to the range, then store as given (455 stays 455) */
+    SG_CHECK(sg_core_log_night(&s, &o, D_SAT, 0, &out) == SG_OK);
+    SG_CHECK(s.night_count == 1 && est_of(&s, 0) == 60);
+    SG_CHECK(sg_core_log_night(&s, &o, D_SAT, 5000, &out) == SG_OK);
+    SG_CHECK(s.night_count == 1 && est_of(&s, 0) == 840);
+    SG_CHECK(sg_core_log_night(&s, &o, D_SAT, 455, &out) == SG_OK);
+    SG_CHECK(s.night_count == 1 && est_of(&s, 0) == 455);
+    SG_CHECK(out.count == 0 && out.dropped == 0);
+}
+
+/* A manual night never schedules, cancels, samples F5 or touches a scheduler field, also
+ * with an alarm and a posted F1, and also with the master toggle off. */
+static void test_v3_no_side_effects(void) {
+    SgState s;
+    SgState snap;
+    SgCmdList out;
+    SgObs o;
+    int64_t T = sg_at(D_FRI, 420);
+    sg_tz_set(TZ_BA);
+    v2_posted_f1(&s, T);                                     /* F1 posted Thu 21:30 */
+    add_ref(&s);
+    snap = s;
+    o = obs(sg_at(D_THU, 1295), T, SG_CREATOR_ALLOWED);      /* Thu 21:35 */
+    SG_CHECK(sg_core_log_night(&s, &o, D_THU, 360, &out) == SG_OK);
+    SG_CHECK(out.count == 0 && out.dropped == 0);
+    SG_CHECK(s.night_count == snap.night_count + 1);
+    SG_CHECK(sched_same(&s, &snap));
+
+    set_flag(&s, SG_FLAG_ENABLED, 0);
+    snap = s;
+    SG_CHECK(sg_core_log_night(&s, &o, D_WED, 420, &out) == SG_OK);
+    SG_CHECK(out.count == 0 && out.dropped == 0);
+    SG_CHECK(s.night_count == snap.night_count + 1);
+    SG_CHECK(sched_same(&s, &snap));
+}
+
+/* Tap-logged night (Thu 23:00, alarm Fri 07:00, synced Fri 08:00) is replaced in place. */
+static void test_v3_replace(void) {
+    SgState s;
+    SgObs o;
+    SgCmdList out;
+    int64_t T = sg_at(D_FRI, 420);
+    sg_tz_set(TZ_BA);
+    sg_state_defaults(&s);
+    o = obs(sg_at(D_THU, 1140), T, SG_CREATOR_ALLOWED);      /* Thu 19:00 sync */
+    SG_CHECK(sg_core_sync(&s, &o, SG_REASON_BROADCAST, &out) == SG_OK);
+    o = obs(sg_at(D_THU, 1380), T, SG_CREATOR_ALLOWED);      /* Thu 23:00 tap */
+    SG_CHECK(sg_core_action(&s, &o, SG_ACTION_SLEEP, &out) == SG_OK);
+    o = obs(sg_at(D_FRI, 480), T, SG_CREATOR_ALLOWED);       /* Fri 08:00 sync */
+    SG_CHECK(sg_core_sync(&s, &o, SG_REASON_APP_OPEN, &out) == SG_OK);
+    SG_CHECK(s.night_count == 1 && sg_log_at(&s, 0)->closed == 1);
+    SG_CHECK(sg_core_log_night(&s, &o, D_FRI, 300, &out) == SG_OK);
+    SG_CHECK(s.night_count == 1 && est_of(&s, 0) == 300);
+    SG_CHECK(sg_core_log_night(&s, &o, D_FRI, 315, &out) == SG_OK);
+    SG_CHECK(s.night_count == 1 && est_of(&s, 0) == 315);
+}
+
+/* Open record (alarm Fri 07:00, tapped Thu 23:00) + manual nights for Thu and Wed:
+ * BED_STATE LOGGED, APP_OPEN plans nothing, a BROADCAST moves only the open record. */
+static void test_v3_open_record_safe(void) {
+    SgState s;
+    SgObs o;
+    SgCmdList out;
+    SgUiModel m;
+    int64_t T = sg_at(D_FRI, 420);
+    int64_t T2 = T + SG_MIN_TO_MS(30);
+    int64_t now = sg_at(D_THU, 1380);
+    sg_tz_set(TZ_BA);
+    sg_state_defaults(&s);
+    o = obs(sg_at(D_THU, 1140), T, SG_CREATOR_ALLOWED);      /* Thu 19:00 */
+    SG_CHECK(sg_core_sync(&s, &o, SG_REASON_BROADCAST, &out) == SG_OK);
+    o = obs(now, T, SG_CREATOR_ALLOWED);                     /* Thu 23:00 tap */
+    SG_CHECK(sg_core_action(&s, &o, SG_ACTION_SLEEP, &out) == SG_OK);
+    SG_CHECK(sg_core_log_night(&s, &o, D_THU, 360, &out) == SG_OK);
+    SG_CHECK(out.count == 0);
+    SG_CHECK(sg_core_log_night(&s, &o, D_WED, 420, &out) == SG_OK);
+    SG_CHECK(out.count == 0);
+    ui_at(&s, &o, &m);
+    SG_CHECK(m.bed_state == SG_BED_LOGGED);
+    /* APP_OPEN: nothing is planned for T */
+    SG_CHECK(sg_core_sync(&s, &o, SG_REASON_APP_OPEN, &out) == SG_OK);
+    SG_CHECK(find(&out, SG_CMD_SCHEDULE, SG_ALARM_F1) == NULL);
+    SG_CHECK(find(&out, SG_CMD_SCHEDULE, SG_ALARM_F2) == NULL);
+    SG_CHECK(find(&out, SG_CMD_SCHEDULE, SG_ALARM_DEBOUNCE) == NULL);
+    SG_CHECK(count_type(&out, SG_CMD_NOTIFY) == 0);
+    /* BROADCAST: the alarm moves 30 min later; only the open record follows */
+    o = obs(now + 5000, T2, SG_CREATOR_ALLOWED);
+    SG_CHECK(sg_core_sync(&s, &o, SG_REASON_BROADCAST, &out) == SG_OK);
+    SG_CHECK(s.night_count == 3 && wake_of(&s, 2) == T2 && sg_log_at(&s, 2)->closed == 0);
+    SG_CHECK(wake_of(&s, 0) == sg_at(D_WED, 420) && est_of(&s, 0) == 420);
+    SG_CHECK(wake_of(&s, 1) == sg_at(D_THU, 420) && est_of(&s, 1) == 360);
+    SG_CHECK(s.night_count == 3 && sg_log_at(&s, 0)->closed == 1 && sg_log_at(&s, 1)->closed == 1);
+}
+
+/* Open record for Fri 07:30 and the user saves "hoy" (Fri) at 06:45: the open record is
+ * overwritten and closed; APP_OPEN then plans nothing and BED_STATE is CLOSED. */
+static void test_v3_replace_open_today(void) {
+    SgState s;
+    SgObs o;
+    SgCmdList out;
+    SgUiModel m;
+    int64_t T = sg_at(D_FRI, 450);
+    sg_tz_set(TZ_BA);
+    sg_state_defaults(&s);
+    o = obs(sg_at(D_THU, 1140), T, SG_CREATOR_ALLOWED);      /* Thu 19:00 */
+    SG_CHECK(sg_core_sync(&s, &o, SG_REASON_BROADCAST, &out) == SG_OK);
+    o = obs(sg_at(D_THU, 1380), T, SG_CREATOR_ALLOWED);      /* Thu 23:00 tap */
+    SG_CHECK(sg_core_action(&s, &o, SG_ACTION_SLEEP, &out) == SG_OK);
+    o = obs(sg_at(D_FRI, 405), T, SG_CREATOR_ALLOWED);       /* Fri 06:45 */
+    SG_CHECK(sg_core_log_night(&s, &o, D_FRI, 360, &out) == SG_OK);
+    SG_CHECK(out.count == 0);
+    SG_CHECK(s.night_count == 1 && sg_log_at(&s, 0)->closed == 1 && est_of(&s, 0) == 360);
+    ui_at(&s, &o, &m);
+    SG_CHECK(m.week.night[6].status == 1 && m.week.night[6].est_sleep_min == 360);
+    SG_CHECK(m.bed_state == SG_BED_CLOSED);
+    SG_CHECK(sg_core_sync(&s, &o, SG_REASON_APP_OPEN, &out) == SG_OK);
+    SG_CHECK(count_type(&out, SG_CMD_NOTIFY) == 0);
+    SG_CHECK(find(&out, SG_CMD_SCHEDULE, SG_ALARM_F1) == NULL);
+    SG_CHECK(find(&out, SG_CMD_SCHEDULE, SG_ALARM_F2) == NULL);
+    SG_CHECK(find(&out, SG_CMD_SCHEDULE, SG_ALARM_DEBOUNCE) == NULL);
+}
+
+/* Picker defaults: logged nights show clamp(est, 60, 840); unlogged and status-2 nights
+ * default to 360; PREV_WDAY is the weekday of the night's date minus one day. */
+static void test_v3_ui_defaults(void) {
+    SgState s;
+    SgObs o;
+    SgUiModel m;
+    int i;
+    int64_t now = sg_at(D_SAT, 720);                         /* Sat 12:00, no alarm */
+    sg_tz_set(TZ_BA);
+    sg_state_defaults(&s);
+    /* Wed: est 900 (bed 920 min before the 07:00 wake) -> default 840 */
+    (void)sg_log_bed_tap(&s, sg_at(D_WED, 420) - SG_MIN_TO_MS(920), sg_at(D_WED, 420));
+    SG_CHECK(sg_log_close_if_due(&s, sg_at(D_WED, 420)) == 1);
+    /* Thu: est 0 (bed 10 min before the wake) -> default 60 */
+    (void)sg_log_bed_tap(&s, sg_at(D_THU, 410), sg_at(D_THU, 420));
+    SG_CHECK(sg_log_close_if_due(&s, sg_at(D_THU, 420)) == 1);
+    /* Fri: stored 475 -> default 475 */
+    SG_CHECK(sg_log_put_manual(&s, D_FRI, 475) == 1);
+    /* Sat: no wake known (bed Fri 23:00, open): status 2 -> default 360 */
+    (void)sg_log_bed_tap(&s, sg_at(D_FRI, 1380), 0);
+    o = obs(now, 0, SG_CREATOR_NONE);
+    ui_at(&s, &o, &m);
+    SG_CHECK(m.week.night[3].date == D_WED && m.week.night[3].est_sleep_min == 900);
+    SG_CHECK(m.week.night[4].date == D_THU && m.week.night[4].est_sleep_min == 0);
+    SG_CHECK(m.week.night[5].date == D_FRI && m.week.night[5].est_sleep_min == 475);
+    SG_CHECK(m.week.night[6].status == 2);
+    SG_CHECK(m.manual_default[3] == 840);
+    SG_CHECK(m.manual_default[4] == 60);
+    SG_CHECK(m.manual_default[5] == 475);
+    SG_CHECK(m.manual_default[6] == 360);
+    for (i = 0; i < SG_DEBT_WINDOW_NIGHTS; i++) {
+        SG_CHECK(m.manual_prev_wday[i] == (m.week.night[i].wday + 6) % 7);
+    }
+    SG_CHECK(m.manual_default[0] == 360 && m.week.night[0].status == 0);
+}
+
+/* sg_core_log_night accepts exactly today-6..today; the window moves with the local date. */
+static void test_v3_midnight(void) {
+    SgState s;
+    SgObs o;
+    SgCmdList out;
+    SgUiModel m;
+    sg_tz_set(TZ_BA);
+    sg_state_defaults(&s);
+    o = obs(sg_at(D_SAT, 1), 0, SG_CREATOR_NONE);            /* Sat 00:01 */
+    SG_CHECK(sg_core_log_night(&s, &o, D_FRI, 360, &out) == SG_OK);
+    ui_at(&s, &o, &m);
+    SG_CHECK(m.week.night[5].date == D_FRI && m.week.night[5].est_sleep_min == 360);
+    SG_CHECK(sg_core_log_night(&s, &o, sg_time_date_add(D_SAT, -6), 360, &out) == SG_OK);
+    SG_CHECK(sg_core_log_night(&s, &o, sg_time_date_add(D_FRI, -6), 360, &out) == SG_E_ARG);
+    SG_CHECK(out.count == 0);
+    SG_CHECK(sg_core_log_night(&s, &o, sg_time_date_add(D_SAT, 1), 360, &out) == SG_E_ARG);
+}
+
+/* Madrid fall-back day, saved at 08:00 local: the night is visible as today. */
+static void test_v3_dst_night(void) {
+    SgState s;
+    SgObs o;
+    SgCmdList out;
+    SgUiModel m;
+    sg_tz_set("Europe/Madrid");
+    sg_state_defaults(&s);
+    o = obs(sg_at(20261025, 480), 0, SG_CREATOR_NONE);
+    SG_CHECK(sg_core_log_night(&s, &o, 20261025, 360, &out) == SG_OK);
+    SG_CHECK(out.count == 0);
+    ui_at(&s, &o, &m);
+    SG_CHECK(m.week.night[6].date == 20261025 && m.week.night[6].est_sleep_min == 360);
+    SG_CHECK(m.week.debt_min == 120);
 }
 
 #define CORE_RUN(fn)                                                         \
@@ -1669,5 +2152,19 @@ void run_core_tests(void) {
     CORE_RUN(test_v2_boot_unseen_then_broadcast);
     CORE_RUN(test_v2_boot_unseen_not_persisted);
     CORE_RUN(test_v2_early_sleep_keeps_f5_hint);
+    CORE_RUN(test_v2_moved_alarm_keeps_f5_hint);
     CORE_RUN(test_v2_boot_unseen_adopted_by_glue);
+    CORE_RUN(test_v2_boot_unseen_app_open_null);
+    CORE_RUN(test_v2_boot_unseen_app_open_snooze);
+    CORE_RUN(test_v2_boot_unseen_after_t_dropped);
+    CORE_RUN(test_v2_boot_unseen_app_open_glue);
+    CORE_RUN(test_v3_user_scenario);
+    CORE_RUN(test_v3_args);
+    CORE_RUN(test_v3_no_side_effects);
+    CORE_RUN(test_v3_replace);
+    CORE_RUN(test_v3_open_record_safe);
+    CORE_RUN(test_v3_replace_open_today);
+    CORE_RUN(test_v3_ui_defaults);
+    CORE_RUN(test_v3_midnight);
+    CORE_RUN(test_v3_dst_night);
 }

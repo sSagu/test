@@ -61,6 +61,22 @@
     <dimen name="sg_row_switch_min">56dp</dimen>
     <dimen name="sg_switch_min_w">52dp</dimen>
 
+    <!-- v3 bottom sheet (docs/design/manual-night-sheet.dc.html) -->
+    <dimen name="sg_sheet_radius">28dp</dimen>
+    <dimen name="sg_sheet_pad_h">20dp</dimen>
+    <dimen name="sg_sheet_pad_top">12dp</dimen>
+    <dimen name="sg_sheet_pad_bottom">28dp</dimen>
+    <dimen name="sg_sheet_gap">18dp</dimen>
+    <dimen name="sg_sheet_handle_w">32dp</dimen>
+    <dimen name="sg_sheet_handle_h">4dp</dimen>
+    <dimen name="sg_sheet_row_radius">20dp</dimen>
+    <dimen name="sg_sheet_picker_min">64dp</dimen>
+    <dimen name="sg_sheet_value_min_w">96dp</dimen>
+    <dimen name="sg_sheet_btn_h">52dp</dimen>
+    <dimen name="sg_link_icon">18dp</dimen>
+    <dimen name="sg_ts_sheet_title">20sp</dimen>
+    <dimen name="sg_ts_sheet_value">20sp</dimen>
+
     <!-- text sizes -->
     <dimen name="sg_ts_title">22sp</dimen>
     <dimen name="sg_ts_alarm">64sp</dimen>

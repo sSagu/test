@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- v3 "Anotar una noche a mano" bottom sheet (docs/design/manual-night-sheet.dc.html,
+     docs/ADVICE-v3.md section 5). Hosted by NightSheet in a framework Dialog anchored at the
+     bottom. Every date, weekday and minute value is set in NightSheet from the C view model;
+     static texts come from @string only. Owner: ui-main. -->
+<!-- A3-1: the root is a ScrollView, so a short window (landscape, large font, split screen)
+     scrolls the sheet instead of clipping Cancelar/Guardar. The insets listener in NightSheet
+     pads sheet_root's bottom by the navigation bar; sheet_content keeps the sheet paddings. -->
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/sheet_root"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@drawable/bg_sheet"
+    android:fillViewport="true"
+    android:overScrollMode="ifContentScrolls">
+
+    <LinearLayout
+        android:id="@+id/sheet_content"
+        style="@style/SgSheet">
+
+        <View
+            style="@style/SgSheetHandle"
+            android:layout_marginTop="0dp" />
+
+        <TextView
+            android:id="@+id/txt_sheet_title"
+            style="@style/SgText.SheetTitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/sg_sheet_gap"
+            android:text="@string/str_manual_title" />
+
+        <TextView
+            android:id="@+id/txt_sheet_sub"
+            style="@style/SgText.Label"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="@string/str_manual_sub" />
+
+        <!-- night picker: previous night (older) | date and span | next night (newer, not after today) -->
+        <LinearLayout
+            android:id="@+id/row_night"
+            style="@style/SgSheetRow">
+
+            <ImageButton
+                android:id="@+id/btn_night_prev"
+                style="@style/SgSheetChevron"
+                android:contentDescription="@string/str_cd_manual_prev"
+                android:src="@drawable/ic_chevron_left" />
+
+            <LinearLayout
+                android:id="@+id/box_night_label"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:orientation="vertical"
+                android:focusable="true"
+                android:accessibilityLiveRegion="polite">
+
+                <TextView
+                    android:id="@+id/txt_night_date"
+                    style="@style/SgText.SheetDate"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content" />
+
+                <TextView
+                    android:id="@+id/txt_night_span"
+                    style="@style/SgText.Small"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:gravity="center_horizontal" />
+            </LinearLayout>
+
+            <ImageButton
+                android:id="@+id/btn_night_next"
+                style="@style/SgSheetChevron"
+                android:contentDescription="@string/str_cd_manual_next"
+                android:src="@drawable/ic_chevron_right" />
+        </LinearLayout>
+
+        <!-- "Dormiste" stepper: 15-minute steps, C clamps to UI_MANUAL_MIN..UI_MANUAL_MAX -->
+        <LinearLayout
+            android:id="@+id/row_minutes"
+            style="@style/SgSheetRow"
+            android:minHeight="@dimen/sg_row_stepper_min"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp">
+
+            <TextView
+                android:id="@+id/txt_minutes_label"
+                style="@style/SgText.SettingTitle"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/str_manual_slept" />
+
+            <Button
+                android:id="@+id/btn_minutes_minus"
+                style="@style/SgStepButton"
+                android:layout_marginStart="12dp"
+                android:text="@string/str_step_minus" />
+
+            <TextView
+                android:id="@+id/txt_minutes_value"
+                style="@style/SgText.SheetValue"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="12dp"
+                android:accessibilityLiveRegion="polite" />
+
+            <Button
+                android:id="@+id/btn_minutes_plus"
+                style="@style/SgStepButton"
+                android:layout_marginStart="12dp"
+                android:text="@string/str_step_plus" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/txt_sheet_note"
+            style="@style/SgText.Small"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/sg_sheet_gap"
+            android:lineSpacingMultiplier="1.3"
+            android:text="@string/str_manual_note" />
+
+        <LinearLayout
+            android:id="@+id/row_sheet_buttons"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/sg_sheet_gap"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/btn_sheet_cancel"
+                style="@style/SgSheetButtonCancel"
+                android:text="@string/str_btn_cancel" />
+
+            <Button
+                android:id="@+id/btn_sheet_save"
+                style="@style/SgSheetButtonSave"
+                android:text="@string/str_btn_save" />
+        </LinearLayout>
+    </LinearLayout>
+</ScrollView>

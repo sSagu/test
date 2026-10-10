@@ -235,6 +235,10 @@ Notification ids: F1 = 1001, F2 = 1002, F3 = 1003, F5 = 1005 (re-posting replace
 | SG_F2_TIMEOUT_MIN / SG_F3_TIMEOUT_MIN / SG_F5_TIMEOUT_MIN | int | 60 / 120 / 180 | min | fixed |
 | SG_ONLY_CLOCK_DEFAULT | bool | 1 | flag | package allow-list filter |
 | SG_PKG_ALLOW | string[] | com.sec.android.app.clockpackage, com.google.android.deskclock | pkg | null creator = accept |
+| SG_MANUAL_MIN_MIN / SG_MANUAL_MAX_MIN | int | 60 / 840 | min | v3 manual night range (C clamps, no rounding) |
+| SG_MANUAL_STEP_MIN | int | 15 | min | v3 sheet stepper increment |
+| SG_MANUAL_DEFAULT_MIN | int | 360 | min | v3 draft for a night without a record |
+| SG_MANUAL_WAKE_MOD | int | 420 | min of day | v3 synthetic wake 07:00 of a manual record |
 
 ## 8. v2: in-app bedtime, reboot re-post, redesigned screen
 
@@ -254,3 +258,20 @@ Authority: docs/ADVICE-v2.md (decisions, tables, task cards); design: docs/desig
   their own screen (gear → SettingsActivity, back arrow / system back). Per-night text rows and the
   social-jetlag line were removed from the screen (F5 hints remain notifications).
 - Persistence format v1 unchanged.
+
+## 9. v3: manual night ("Anotar una noche a mano")
+
+Authority: docs/ADVICE-v3.md (decisions, behaviour table, view ids, task cards); design: docs/design/ "v3 addition".
+- **Why**: the log only lives on the phone and only the bed button fills it, so nights before install, or nights
+  without a tap, never count. The owner asked "añadime que dormí 6 horas hoy".
+- **Entry**: link "+ Anotar una noche a mano" at the end of the week card opens a bottom sheet: night picker over
+  the 7 chart nights ("hoy, sáb 10/10" / "noche del vie al sáb", newest = today), "Dormiste" stepper (15-min
+  steps, 1 h–14 h, default the night's current estimate or 6 h 00 min), Cancelar / Guardar.
+- **Meaning**: the value IS the estimated sleep of that night (est = N exactly): the record gets a synthetic wake
+  at 07:00 of the night's wake date and bed = wake − (N + 20 min latency). Shown on the chart and counted in the
+  weekly debt like any logged night, attributed to its wake date (today's column for "hoy").
+- **Replace**: a night that already has a record is overwritten (newest record of that date). An open record of
+  tonight (button tap for tomorrow's alarm) is never touched; one waking on the chosen date is replaced and closed.
+- **No side effects**: no notification, alarm, F5 weekday sample or reminder state changes; works with reminders
+  off. Out-of-window dates are refused; minutes are clamped to 60..840.
+- Persistence format v1 unchanged (a manual night is a normal closed record).

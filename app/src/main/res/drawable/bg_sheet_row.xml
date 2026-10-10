@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- v3 sheet rows (night picker, "Dormiste" stepper): #141416, radius 20. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="@color/sg_card" />
+    <corners android:radius="@dimen/sg_sheet_row_radius" />
+</shape>

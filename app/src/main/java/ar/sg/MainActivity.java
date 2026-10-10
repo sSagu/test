@@ -2,6 +2,7 @@ package ar.sg;
 
 import android.Manifest;
 import android.app.AlertDialog;
+import android.app.Dialog;
 import android.content.ActivityNotFoundException;
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -22,8 +23,8 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 
 /**
- * The only main screen. Java renders; C decides. Every entry: observe -> one Native call
- * -> run the returned commands -> bind the UI model returned by nativeUiModel.
+ * The only main screen. Java renders; C decides. Every entry: observe, one Native call,
+ * run the returned commands, then bind the UI model returned by nativeUiModel.
  * No threads, handlers or timers. Minutes and dates are formatted here, never computed.
  * Owner: ui-main (docs/ADVICE-v2.md sections 3, 5, 6).
  */
@@ -46,6 +47,10 @@ public final class MainActivity extends android.app.Activity {
     private ScrollView root;
     private TextView txtError;
     private LinearLayout boxNotif;
+
+    // v3 manual night entry: link under the week card and the open sheet (if any)
+    private Button btnManualNight;
+    private Dialog sheet;
 
     // hero: alarm card
     private LinearLayout boxHeroAlarm, rowRemind, rowBedSuggest;
@@ -164,6 +169,7 @@ public final class MainActivity extends android.app.Activity {
         txtTargetLabel = findViewById(R.id.txt_target_label);
         txtDebtSub = findViewById(R.id.txt_debt_sub);
         txtDebtValue = findViewById(R.id.txt_debt_value);
+        btnManualNight = findViewById(R.id.btn_manual_night);
 
         cols = new LinearLayout[]{
                 findViewById(R.id.col_0), findViewById(R.id.col_1), findViewById(R.id.col_2),
@@ -209,6 +215,9 @@ public final class MainActivity extends android.app.Activity {
         btnBedUpdate.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) { sleep(); }
         });
+        btnManualNight.setOnClickListener(new View.OnClickListener() {
+            @Override public void onClick(View v) { openManualSheet(); }
+        });
     }
 
     // ------------------------------------------------------------------ binding
@@ -225,6 +234,7 @@ public final class MainActivity extends android.app.Activity {
         bindHero(ui);
         bindBed(ui);
         bindWeek(ui);
+        bindManual(ui);
         return ui;
     }
 
@@ -304,7 +314,7 @@ public final class MainActivity extends android.app.Activity {
 
         boolean logged = bed == Native.BED_LOGGED;
         boxBedLogged.setVisibility(visible(logged));
-        txtBedLogged.setText(getString(R.string.str_bed_logged, fmtMod(mod)));
+        Sg.setTextIfChanged(txtBedLogged, getString(R.string.str_bed_logged, fmtMod(mod)));
         boolean canUpdate = ui[Native.UI_BED_CAN_UPDATE] != 0;
         txtBedLoggedSub.setText(canUpdate ? R.string.str_bed_logged_sub : R.string.str_bed_logged_done);
         btnBedUpdate.setVisibility(visible(canUpdate));
@@ -374,6 +384,10 @@ public final class MainActivity extends android.app.Activity {
         }
     }
 
+    private void bindManual(long[] ui) {
+        btnManualNight.setVisibility(visible(ui[Native.UI_MANUAL_OK] != 0));
+    }
+
     private static int setting(long[] ui, int key) {
         return (int) ui[Native.UI_SETTINGS + key];
     }
@@ -407,6 +421,31 @@ public final class MainActivity extends android.app.Activity {
         run(Native.nativeAction(o.nowMs, o.nextAlarmMs, o.creator, o.exactAllowed, o.notifAllowed,
                 Native.ACTION_SLEEP));
         bind(Sg.observe(this));
+    }
+
+    /** v3: opens the "Anotar una noche a mano" sheet with a fresh UI model. The sheet saves
+     *  through NightSheet (one nativeLogNight call); a save re-renders this screen. */
+    private void openManualSheet() {
+        if (sheet != null && sheet.isShowing()) {
+            return;
+        }
+        Sg.Observation o = Sg.observe(this);
+        long[] ui = Native.nativeUiModel(o.nowMs, o.nextAlarmMs, o.creator, o.exactAllowed, o.notifAllowed);
+        if (ui == null || ui.length < Native.UI_LEN || ui[Native.UI_MANUAL_OK] == 0) {
+            return;
+        }
+        sheet = NightSheet.show(this, ui, new NightSheet.Saved() {
+            @Override public void onSaved() { bind(Sg.observe(MainActivity.this)); }
+        });
+    }
+
+    @Override
+    protected void onDestroy() {
+        if (sheet != null && sheet.isShowing()) {
+            sheet.dismiss();
+        }
+        sheet = null;
+        super.onDestroy();
     }
 
     private void run(long[] cmds) {

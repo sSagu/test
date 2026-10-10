@@ -140,9 +140,9 @@ public final class SettingsActivity extends Activity {
         swJetlagNoalarm.setChecked(setting(ui, Native.SET_JETLAG_NOALARM) != 0);
         swOnlyClock.setChecked(setting(ui, Native.SET_ONLY_CLOCK) != 0);
 
-        txtLeadValue.setText(fmtDur(setting(ui, Native.SET_LEAD_MIN)));
-        txtTargetValue.setText(fmtDur(setting(ui, Native.SET_TARGET_MIN)));
-        txtWinddownValue.setText(fmtDur(setting(ui, Native.SET_WINDDOWN_MIN)));
+        Sg.setTextIfChanged(txtLeadValue, fmtDur(setting(ui, Native.SET_LEAD_MIN)));
+        Sg.setTextIfChanged(txtTargetValue, fmtDur(setting(ui, Native.SET_TARGET_MIN)));
+        Sg.setTextIfChanged(txtWinddownValue, fmtDur(setting(ui, Native.SET_WINDDOWN_MIN)));
         rowWinddownMin.setVisibility(setting(ui, Native.SET_WINDDOWN_ON) != 0 ? View.VISIBLE : View.GONE);
     }
 

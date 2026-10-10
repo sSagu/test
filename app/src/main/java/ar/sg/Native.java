@@ -45,7 +45,13 @@ public final class Native {
     public static final int UI_HERO = 66, UI_ALARM_WDAY = 67, UI_REMIND_STATE = 68, UI_REMIND_MOD = 69,
             UI_BED_STATE = 70, UI_BED_MOD = 71, UI_BED_CAN_UPDATE = 72, UI_DEBT_STATE = 73,
             UI_NOTIF_BANNER = 74, UI_ASK_NOTIF = 75, UI_TARGET_PERMILLE = 76, UI_LABEL_NIGHT = 77,
-            UI_BARS = 78, UI_LEN = 85;
+            UI_BARS = 78;
+    // v3 (appended; docs/ADVICE-v3.md section 3). Per-night blocks use the week index i
+    // (0 = today-6 .. 6 = today): UI_MANUAL_DEFAULT + i, UI_MANUAL_PREV_WDAY + i.
+    public static final int UI_MANUAL_OK = 85, UI_MANUAL_MIN = 86, UI_MANUAL_MAX = 87,
+            UI_MANUAL_STEP = 88, UI_MANUAL_DEFAULT = 89, UI_MANUAL_PREV_WDAY = 96, UI_LEN = 103;
+    /** Week index of today's night (the picker's "hoy" and the newest chart column). */
+    public static final int NIGHT_TODAY = 6;
     // night word offsets inside each UI_NIGHT_WORDS block
     public static final int NIGHT_DATE = 0, NIGHT_WDAY = 1, NIGHT_STATUS = 2, NIGHT_BED_MOD = 3,
             NIGHT_WAKE_MOD = 4, NIGHT_EST_MIN = 5;
@@ -81,6 +87,14 @@ public final class Native {
 
     /** Current value of a setting, -1 unknown. */
     public static native int nativeGet(int key);
+
+    /** v3 "Anotar una noche a mano": store `minutes` for the night that wakes on `date`
+     *  (yyyymmdd, echoed unchanged from UI_NIGHTS block i, NIGHT_DATE). C validates the
+     *  7-night window and clamps minutes to [UI_MANUAL_MIN, UI_MANUAL_MAX]; replaces an
+     *  existing record for that date. Returns commands (currently always empty: run them
+     *  anyway). Invalid input changes nothing. */
+    public static native long[] nativeLogNight(long nowMs, long nextAlarmMs, int creator,
+                                               int exactAllowed, int notifAllowed, int date, int minutes);
 
     /** UI view model, long[UI_LEN]. */
     public static native long[] nativeUiModel(long nowMs, long nextAlarmMs, int creator,

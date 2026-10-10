@@ -126,6 +126,20 @@ enum {
 int sg_core_set(SgState *s, const SgObs *o, int key, int32_t value, SgCmdList *out);
 int32_t sg_core_get(const SgState *s, int key);   /* -1 for unknown key */
 
+/* v3 "Anotar una noche a mano" (docs/ADVICE-v3.md). `out` is reset first and stays EMPTY on
+ * every path (a manual night schedules and cancels nothing).
+ *  today = local date of o->now_ms. SG_E_ARG, state untouched, when: any pointer NULL, now out
+ *  of range or its local date unavailable, `date` is not one of the 7 dates
+ *  sg_time_date_add(today, k) for k = -6..0 (Java echoes SG_UI_NIGHTS[i] date; a sheet left
+ *  open across midnight can thus only hit a still-visible night or be refused), or
+ *  sg_log_put_manual() < 0.
+ *  minutes is clamped to [SG_MANUAL_MIN_MIN, SG_MANUAL_MAX_MIN] (NO step rounding: an existing
+ *  7 h 55 min saved unchanged stays 7 h 55 min), then sg_log_put_manual(s, date, minutes).
+ *  Works with the master toggle off. Never calls sg_core_sync, never adds an F5 sample, never
+ *  touches last_* / debounce / snooze / flags / boot_unseen. Returns SG_OK. */
+int sg_core_log_night(SgState *s, const SgObs *o, int32_t date, int32_t minutes,
+                      SgCmdList *out);
+
 /* UI view model. Flattened by JNI into long[SG_UI_LEN] using the SG_UI_* indices. */
 typedef struct {
     int32_t alarm_rel;        /* SG_REL_* */
@@ -157,6 +171,19 @@ typedef struct {
     int32_t label_night;      /* largest i in 0..6 with week.night[i].status == 1, else -1 */
     int32_t bar_permille[SG_DEBT_WINDOW_NIGHTS]; /* status==1: min(max(est,0),MAX)*1000/MAX
                                                     (integer division, 0..1000); else -1 */
+
+    /* ---- v3 fields (docs/ADVICE-v3.md section 3). Flattened AFTER the v2 85 words. ----
+     * Per-night arrays use the SgWeek index (0 = today - 6 .. 6 = today); the picker's date
+     * and weekday come from week.night[i] (SG_UI_NIGHTS), "hoy" is i == 6. */
+    int32_t manual_ok;        /* 1 iff week.night[6].date != 0 (link + sheet usable), else 0 */
+    int32_t manual_min;       /* SG_MANUAL_MIN_MIN */
+    int32_t manual_max;       /* SG_MANUAL_MAX_MIN */
+    int32_t manual_step;      /* SG_MANUAL_STEP_MIN */
+    int32_t manual_default[SG_DEBT_WINDOW_NIGHTS]; /* status==1: clamp(est, min, max);
+                                                     else SG_MANUAL_DEFAULT_MIN */
+    int32_t manual_prev_wday[SG_DEBT_WINDOW_NIGHTS]; /* sg_time_wday(date_add(night[i].date,
+                                                       -1)) ("noche del X al Y"); -1 if date
+                                                       is 0 or the computation fails */
 } SgUiModel;
 
 /* Chart scale: a full-height bar is 10 h of estimated sleep. */
@@ -216,7 +243,11 @@ enum {
     SG_UI_DEBT_STATE = 73, SG_UI_NOTIF_BANNER = 74, SG_UI_ASK_NOTIF = 75,
     SG_UI_TARGET_PERMILLE = 76, SG_UI_LABEL_NIGHT = 77,
     SG_UI_BARS = 78,               /* 7 words: bar_permille[0..6], oldest first */
-    SG_UI_LEN = 85
+    /* v3, appended (v1/v2 indices above never move) */
+    SG_UI_MANUAL_OK = 85, SG_UI_MANUAL_MIN = 86, SG_UI_MANUAL_MAX = 87, SG_UI_MANUAL_STEP = 88,
+    SG_UI_MANUAL_DEFAULT = 89,     /* 7 words: manual_default[0..6] */
+    SG_UI_MANUAL_PREV_WDAY = 96,   /* 7 words: manual_prev_wday[0..6] */
+    SG_UI_LEN = 103
 };
 /* Fill out[SG_UI_LEN] from m. */
 void sg_core_ui_flatten(const SgUiModel *m, int64_t out[SG_UI_LEN]);

@@ -16,6 +16,7 @@ App personal para Android (sideload, sin Play Store) que lee tu **próxima alarm
 - **F2 · Aviso previo suave** (desactivado por defecto): una frase tipo "Bajá las luces y dejá las pantallas", 30 min antes del F1 (ajustable de 15 a 60 min).
 - **F3 · "Alarma cercana"** (activado): si ponés la alarma y ya quedó cerca del F1, te dice cuánto podés dormir si te acostás ya. Solo avisa si quedan **4 h o más**. Como máximo una vez cada 3 h.
 - **F4 · Registro de noches** (activado): tocás **"Me voy a dormir"** (en el aviso o en la pantalla principal) y la app guarda la hora de acostarte. La pantalla principal muestra las últimas 7 noches en un gráfico y tu **deuda de sueño semanal**, contando solo las noches registradas. Objetivo por defecto: **8 h** (rango 7 h a 9 h). Guarda 90 noches.
+- **F4 · Anotar una noche a mano** (v3): al final de la tarjeta semanal, el enlace **"Anotar una noche a mano"** abre una hoja inferior. Elegís la noche con ‹ › entre las últimas 7 (la de hoy aparece como "hoy, sáb 10/10", con "noche del vie al sáb" debajo: es la noche que termina esta mañana), ajustás **"Dormiste"** con − y + (de 1 h a 14 h, en pasos de 15 min; si no hay estimación para esa noche, arranca en 6 h) y tocás **Guardar**. Sirve para las noches que no anotaste con el botón. Si esa noche ya estaba anotada, la **reemplaza**. Cuenta como sueño en el gráfico y en la deuda de la semana, y aparece en el gráfico **ese mismo día**, sin esperar a medianoche. No crea ni cambia alarmas ni avisos.
 - **F5 · Sugerencias para el finde** (activado, silenciosas): si tu alarma del sábado o domingo es más de 90 min posterior a la de la semana, te sugiere una hora tope para levantarte. Si el viernes o sábado a las 21:30 no hay alarma, te sugiere una hora de levantarte.
 
 **Ajustes** (engranaje, pantalla propia): activar/desactivar todo, anticipación del aviso y horas de sueño objetivo (con − y +), aviso previo, alarma cercana, sugerencias para el finde, solo alarmas del Reloj (activado por defecto) y borrar el registro.
@@ -49,6 +50,8 @@ adb install -r build/sg.apk
 ---
 
 ## Primer uso
+
+> **Si actualizaste desde la versión anterior:** instalá el APK encima (sin desinstalar), abrí la app, tocá **«Anotar una noche a mano»**, elegí **«hoy, sáb 10/10»**, poné **6 h 00 min** y **Guardar**.
 
 1. **Abrí la app una vez.** Es obligatorio: Android no ejecuta los receptores de una app que nunca se abrió, así que si no la abrís, no vas a recibir nada.
 2. **Permití notificaciones** cuando la app lo pida. Sin ese permiso no puede avisarte. Si lo rechazaste, aparece un banner con el botón para ir a los ajustes.
@@ -108,6 +111,8 @@ Android y One UI pueden frenar la app en segundo plano y perderse el recordatori
 2. Borrá la alarma de prueba en el Reloj. Si queda, suena de verdad y tapa tu alarma real.
 3. Engranaje → Ajustes → "Borrar registro de noches" → **Borrar**.
 4. Abrí la app: con tu alarma real, "Te aviso para prepararte a las" tiene que mostrar (alarma − 9 h 30). Si la alarma está a más de 36 h (por ejemplo, el lunes visto desde el viernes), dice "Cuando falte menos de un día y medio, acá vas a ver a qué hora te aviso." hasta que falten 36 h. Es normal.
+
+**Anotar una noche a mano (v3):** tocá **"Anotar una noche a mano"** al final de la tarjeta semanal, elegí **"hoy, sáb 10/10"**, poné **6 h 00 min** con + y − y tocá **Guardar**. Tiene que aparecer la noche en el gráfico de hoy y la deuda de la semana actualizada. Si tocás **Cancelar**, no se guarda nada.
 
 **Esto no es una falla:**
 - Después de que salió el aviso, la app dice "Aviso enviado a las HH:MM".

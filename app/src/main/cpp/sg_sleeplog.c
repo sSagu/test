@@ -179,6 +179,12 @@ int32_t sg_log_est_sleep_min(const SgNight *n)
     return est;
 }
 
+/* Instant a record is attributed to (the sg_log_week rule): wake when known, else bed + 12 h. */
+static int64_t attr_ms_of(const SgNight *n)
+{
+    return (n->wake_ms > 0) ? n->wake_ms : n->bed_ms + SG_LOG_TWELVE_H_MS;
+}
+
 static void empty_view(SgNightView *v, int32_t date, int8_t wday)
 {
     v->date = date;
@@ -228,7 +234,7 @@ void sg_log_week(const SgState *s, int32_t today_date, SgWeek *out)
         if (n == NULL) {
             continue;
         }
-        attr_ms = (n->wake_ms > 0) ? n->wake_ms : n->bed_ms + SG_LOG_TWELVE_H_MS;
+        attr_ms = attr_ms_of(n);
         if (sg_time_local(attr_ms, &loc) != 0) {
             continue;
         }
@@ -269,6 +275,85 @@ void sg_log_week(const SgState *s, int32_t today_date, SgWeek *out)
         }
     }
     out->debt_min = (debt_sum < 0) ? 0 : debt_sum;
+}
+
+/* ---- v3 manual night (docs/ADVICE-v3.md section 2) ---- */
+
+int32_t sg_log_attr_date(const SgNight *n)
+{
+    SgLocal loc;
+
+    if (n == NULL || sg_time_local(attr_ms_of(n), &loc) != 0) {
+        return 0;
+    }
+    return loc.date;
+}
+
+/* Logical index (oldest = 0) of the NEWEST record attributed to date, or -1. */
+static int newest_for_date(const SgState *s, int32_t date)
+{
+    int i;
+
+    for (i = (int)s->night_count - 1; i >= 0; i--) {
+        if (sg_log_attr_date(sg_log_at(s, i)) == date) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+int sg_log_put_manual(SgState *s, int32_t date, int32_t minutes)
+{
+    int64_t wake;
+    int64_t bed;
+    SgLocal loc;
+    SgNight *slot;
+    int i;
+    int count;
+    int p;
+
+    if (s == NULL || minutes < SG_MANUAL_MIN_MIN || minutes > SG_MANUAL_MAX_MIN) {
+        return -1;
+    }
+    wake = sg_time_from_local(date, SG_MANUAL_WAKE_MOD);
+    if (wake <= 0 || sg_time_local(wake, &loc) != 0 || loc.date != date) {
+        return -1;
+    }
+    bed = wake - SG_MIN_TO_MS((int64_t)minutes + SG_LATENCY_MIN);
+    if (bed <= 0) {
+        return -1;
+    }
+
+    i = newest_for_date(s, date);
+    if (i >= 0) {
+        slot = &s->nights[idx_of(i, s->night_head)];
+        slot->bed_ms = bed;
+        slot->wake_ms = wake;
+        slot->closed = 1;
+        return 2;
+    }
+
+    if (s->night_count >= SG_LOG_RETAIN_NIGHTS) {
+        s->night_head = (uint16_t)((s->night_head + 1) % SG_LOG_RETAIN_NIGHTS);
+        s->night_count = (uint16_t)(s->night_count - 1);
+    }
+    count = (int)s->night_count;
+    p = count;
+    if (count > 0 && s->nights[idx_of(count - 1, s->night_head)].closed == 0) {
+        p = count - 1; /* an open record always stays the newest */
+    }
+    while (p > 0 && attr_ms_of(sg_log_at(s, p - 1)) > wake) {
+        p--;
+    }
+    for (i = count; i > p; i--) {
+        s->nights[idx_of(i, s->night_head)] = s->nights[idx_of(i - 1, s->night_head)];
+    }
+    slot = &s->nights[idx_of(p, s->night_head)];
+    slot->bed_ms = bed;
+    slot->wake_ms = wake;
+    slot->closed = 1;
+    s->night_count = (uint16_t)(count + 1);
+    return 1;
 }
 
 void sg_log_clear(SgState *s)

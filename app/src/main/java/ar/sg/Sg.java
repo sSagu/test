@@ -8,6 +8,8 @@ import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.drawable.Icon;
+import android.text.TextUtils;
+import android.widget.TextView;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -18,6 +20,14 @@ import java.util.List;
  * returned commands. Owner: card J1. Holds no state of its own.
  */
 public final class Sg {
+
+    /** Rendering only: set text when it differs, so polite live regions (TalkBack) announce
+     *  real changes and are not re-read on every re-bind (TIME_TICK, focus regain). */
+    static void setTextIfChanged(TextView t, CharSequence s) {
+        if (!TextUtils.equals(t.getText(), s)) {
+            t.setText(s);
+        }
+    }
     private Sg() {}
 
     static final String STATE_FILE = "sg_state.bin";

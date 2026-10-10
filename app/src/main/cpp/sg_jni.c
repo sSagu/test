@@ -15,7 +15,12 @@
 #include "sg_store.h"
 
 #define SG_JNI_CLASS "ar/sg/Native"
-#define SG_JNI_METHOD_COUNT 7
+#define SG_JNI_METHOD_COUNT 8
+
+/* to_java_array stack buffer: large enough for a full command list AND the UI model
+ * (SG_UI_LEN grew past SG_MAX_CMDS * SG_CMD_WORDS in v3). */
+#define SG_JNI_CMD_WORDS (SG_MAX_CMDS * SG_CMD_WORDS)
+#define SG_JNI_BUF_WORDS (SG_JNI_CMD_WORDS > SG_UI_LEN ? SG_JNI_CMD_WORDS : SG_UI_LEN)
 
 static pthread_mutex_t g_mu = PTHREAD_MUTEX_INITIALIZER;
 static SgState g_state;          /* guarded by g_mu */
@@ -71,7 +76,7 @@ static SgObs make_obs(jlong now, jlong next, jint creator, jint exact, jint noti
 /* Runs with no lock held. Returns NULL on allocation or JNI failure. */
 static jlongArray to_java_array(JNIEnv *env, const int64_t *words, int32_t n)
 {
-    jlong buf[SG_MAX_CMDS * SG_CMD_WORDS];
+    jlong buf[SG_JNI_BUF_WORDS];
     jlongArray arr;
     int32_t i;
 
@@ -120,6 +125,12 @@ static int do_action(SgState *s, const SgObs *o, int arg, int32_t arg2, SgCmdLis
 static int do_set(SgState *s, const SgObs *o, int arg, int32_t arg2, SgCmdList *out)
 {
     return sg_core_set(s, o, arg, arg2, out);
+}
+
+/* v3: arg = date (yyyymmdd), arg2 = minutes. */
+static int do_log_night(SgState *s, const SgObs *o, int arg, int32_t arg2, SgCmdList *out)
+{
+    return sg_core_log_night(s, o, (int32_t)arg, arg2, out);
 }
 
 static jlongArray mutate(JNIEnv *env, MutFn fn, const SgObs *o, int arg, int32_t arg2)
@@ -238,6 +249,16 @@ static jlongArray jni_set(JNIEnv *env, jclass cls, jlong now, jlong next, jint c
     return mutate(env, do_set, &o, (int)key, (int32_t)value);
 }
 
+static jlongArray jni_log_night(JNIEnv *env, jclass cls, jlong now, jlong next, jint creator,
+                                jint exact, jint notif, jint date, jint minutes)
+{
+    SgObs o;
+
+    (void)cls;
+    o = make_obs(now, next, creator, exact, notif);
+    return mutate(env, do_log_night, &o, (int)date, (int32_t)minutes);
+}
+
 static jint jni_get(JNIEnv *env, jclass cls, jint key)
 {
     int32_t v;
@@ -285,7 +306,8 @@ static const JNINativeMethod g_methods[SG_JNI_METHOD_COUNT] = {
     { "nativeAction", "(JJIIII)[J", (void *)jni_action },
     { "nativeSet", "(JJIIIII)[J", (void *)jni_set },
     { "nativeGet", "(I)I", (void *)jni_get },
-    { "nativeUiModel", "(JJIII)[J", (void *)jni_ui_model }
+    { "nativeUiModel", "(JJIII)[J", (void *)jni_ui_model },
+    { "nativeLogNight", "(JJIIIII)[J", (void *)jni_log_night }
 };
 
 JNIEXPORT jint JNI_OnLoad(JavaVM *vm, void *reserved)

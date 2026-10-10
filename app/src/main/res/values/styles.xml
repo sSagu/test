@@ -324,6 +324,134 @@
         <item name="android:textSize">@dimen/sg_ts_body</item>
     </style>
 
+    <!-- ===== v3 manual night (docs/ADVICE-v3.md section 5) ===== -->
+
+    <!-- Bottom-sheet dialog window: framework Dialog, transparent window, dimmed screen behind,
+         slides in from the bottom. Java anchors it: gravity BOTTOM, MATCH_PARENT x WRAP_CONTENT. -->
+    <style name="SgSheetDialog" parent="android:Theme.Material.Dialog.NoActionBar">
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowIsFloating">true</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:backgroundDimEnabled">true</item>
+        <item name="android:backgroundDimAmount">0.65</item>
+        <item name="android:windowMinWidthMajor">100%</item>
+        <item name="android:windowMinWidthMinor">100%</item>
+        <item name="android:windowAnimationStyle">@android:style/Animation.InputMethod</item>
+        <item name="android:windowElevation">0dp</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightNavigationBar">false</item>
+        <item name="android:enforceNavigationBarContrast">false</item>
+        <item name="android:textColorPrimary">@color/sg_text_primary</item>
+        <item name="android:colorAccent">@color/sg_accent</item>
+        <item name="android:colorControlHighlight">@color/sg_ripple</item>
+    </style>
+
+    <!-- Sheet root: #1A1A1D, top radius 28, padding 12 top / 20 sides / 28 bottom
+         (Java adds the navigation-bar inset to paddingBottom). -->
+    <style name="SgSheet">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:orientation">vertical</item>
+        <item name="android:background">@drawable/bg_sheet</item>
+        <item name="android:paddingStart">@dimen/sg_sheet_pad_h</item>
+        <item name="android:paddingEnd">@dimen/sg_sheet_pad_h</item>
+        <item name="android:paddingTop">@dimen/sg_sheet_pad_top</item>
+        <item name="android:paddingBottom">@dimen/sg_sheet_pad_bottom</item>
+    </style>
+
+    <!-- Grab handle (decorative). -->
+    <style name="SgSheetHandle">
+        <item name="android:layout_width">@dimen/sg_sheet_handle_w</item>
+        <item name="android:layout_height">@dimen/sg_sheet_handle_h</item>
+        <item name="android:layout_gravity">center_horizontal</item>
+        <item name="android:background">@drawable/bg_sheet_handle</item>
+        <item name="android:importantForAccessibility">no</item>
+    </style>
+
+    <!-- Sheet row (night picker: min 64, padding 8; stepper: override minHeight 72, padding 16). -->
+    <style name="SgSheetRow">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginTop">@dimen/sg_sheet_gap</item>
+        <item name="android:minHeight">@dimen/sg_sheet_picker_min</item>
+        <item name="android:orientation">horizontal</item>
+        <item name="android:gravity">center_vertical</item>
+        <item name="android:background">@drawable/bg_sheet_row</item>
+        <item name="android:paddingStart">8dp</item>
+        <item name="android:paddingEnd">8dp</item>
+    </style>
+
+    <!-- Picker chevrons: 48 dp, borderless ripple, enabled #EDEDED / disabled #4A4A52. -->
+    <style name="SgSheetChevron" parent="SgIconButton">
+        <item name="android:tint">@color/sg_chevron_fg</item>
+    </style>
+
+    <!-- "Anotar una noche a mano": 20 sp semibold heading. -->
+    <style name="SgText.SheetTitle">
+        <item name="android:textSize">@dimen/sg_ts_sheet_title</item>
+        <item name="android:textFontWeight">600</item>
+        <item name="android:accessibilityHeading">true</item>
+    </style>
+    <!-- picker date line ("hoy, sáb 10/10"): 17 sp medium, centred -->
+    <style name="SgText.SheetDate">
+        <item name="android:textSize">@dimen/sg_ts_row_value</item>
+        <item name="android:textFontWeight">500</item>
+        <item name="android:gravity">center_horizontal</item>
+    </style>
+    <!-- "Dormiste" value ("6 h 00 min"): 20 sp medium tabular, min 96 dp, live region -->
+    <style name="SgText.SheetValue" parent="SgText.StepValue">
+        <item name="android:minWidth">@dimen/sg_sheet_value_min_w</item>
+        <item name="android:textSize">@dimen/sg_ts_sheet_value</item>
+    </style>
+
+    <!-- Cancelar: 52 dp outline pill, primary text 16 sp medium (w 0 / weight 1 in the row). -->
+    <style name="SgSheetButtonCancel">
+        <item name="android:layout_width">0dp</item>
+        <item name="android:layout_height">@dimen/sg_sheet_btn_h</item>
+        <item name="android:layout_weight">1</item>
+        <item name="android:minHeight">@dimen/sg_sheet_btn_h</item>
+        <item name="android:background">@drawable/bg_pill_outline</item>
+        <item name="android:stateListAnimator">@null</item>
+        <item name="android:elevation">0dp</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:textColor">@color/sg_text_primary</item>
+        <item name="android:textSize">@dimen/sg_ts_body</item>
+        <item name="android:textFontWeight">500</item>
+    </style>
+    <!-- Guardar: 52 dp accent pill, on-accent text 16 sp semibold. -->
+    <style name="SgSheetButtonSave" parent="SgSheetButtonCancel">
+        <item name="android:background">@drawable/bg_pill_primary</item>
+        <item name="android:textColor">@color/sg_on_accent</item>
+        <item name="android:textFontWeight">600</item>
+        <item name="android:layout_marginStart">12dp</item>
+    </style>
+
+    <!-- Main-screen text link "+ Anotar una noche a mano" (apply to a Button: role = button).
+         Accent 15 sp medium, 18 dp plus icon, >= 48 dp hit area, -4 dp start offset like the mockup. -->
+    <style name="SgLinkButton">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginTop">8dp</item>
+        <item name="android:layout_marginStart">-4dp</item>
+        <item name="android:minWidth">@dimen/sg_touch_min</item>
+        <item name="android:minHeight">@dimen/sg_touch_min</item>
+        <item name="android:paddingStart">4dp</item>
+        <item name="android:paddingEnd">8dp</item>
+        <item name="android:paddingTop">0dp</item>
+        <item name="android:paddingBottom">0dp</item>
+        <item name="android:gravity">center_vertical|start</item>
+        <item name="android:background">@drawable/bg_link</item>
+        <item name="android:stateListAnimator">@null</item>
+        <item name="android:elevation">0dp</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:textColor">@color/sg_accent</item>
+        <item name="android:textSize">@dimen/sg_ts_outline</item>
+        <item name="android:textFontWeight">500</item>
+        <item name="android:drawableStart">@drawable/ic_plus</item>
+        <item name="android:drawableTint">@color/sg_accent</item>
+        <item name="android:drawablePadding">8dp</item>
+    </style>
+
     <!-- v1 name, kept only so the v1 layout still links until ui-main replaces it. -->
     <style name="SgNightRow">
         <item name="android:layout_width">match_parent</item>

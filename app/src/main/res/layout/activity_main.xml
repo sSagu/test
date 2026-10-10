@@ -658,6 +658,13 @@
                     android:layout_height="wrap_content"
                     android:layout_marginStart="12dp" />
             </LinearLayout>
+
+            <!-- v3: "+ Anotar una noche a mano" (visible iff UI_MANUAL_OK == 1; opens NightSheet) -->
+            <Button
+                android:id="@+id/btn_manual_night"
+                style="@style/SgLinkButton"
+                android:text="@string/str_manual_link"
+                android:visibility="gone" />
         </LinearLayout>
 
         <TextView
