@@ -21,3 +21,12 @@ Design tokens (dp / sp, frame 412×892 dp = S25 FE):
 - Big alarm time: 64 sp light, tabular figures. Section titles 16 sp semibold. Body 15–16 sp.
 - Touch targets ≥ 48 dp (steppers 44 dp visual inside a 48 dp row is acceptable only if the hit area is ≥ 48 dp).
 - Icons: outline stroke icons (gear, back, bell, moon, check) as vector drawables.
+
+## v3 addition: manual night entry (approved with "que se demore todo lo que se necesite")
+
+- `main-screen.dc.html` now ends the week card with a text link "+ Anotar una noche a mano" (accent, ≥48 dp).
+- `manual-night-sheet.dc.html`: bottom sheet (#1A1A1D, top radius 28, grab handle) over the dimmed main screen:
+  title "Anotar una noche a mano", subtitle "Para las noches que no anotaste con el botón.",
+  night picker ‹ "hoy, sáb 10/10" / "noche del vie al sáb" › (last 7 nights, next disabled on today),
+  "Dormiste" stepper − "6 h 00 min" + (15-min steps), note "Cuenta como sueño en el gráfico y en la deuda
+  de la semana. Si esa noche ya estaba anotada, la reemplaza.", buttons Cancelar (outline) / Guardar (primary).

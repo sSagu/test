@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Anotar una noche a mano</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="width: 412px; height: 892px; box-sizing: border-box; background: #050506; color: #EDEDED; font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; display: flex; flex-direction: column; justify-content: flex-end">
+
+<div style="flex: 1; padding: 8px 20px; display: flex; flex-direction: column; gap: 16px; opacity: 0.35" aria-hidden="true">
+<div style="height: 56px; display: flex; align-items: center; font-size: 22px; font-weight: 600">Tu sueño</div>
+<div style="height: 250px; border-radius: 24px; background: #141416"></div>
+<div style="height: 64px; border-radius: 32px; background: #141416"></div>
+</div>
+
+<section role="dialog" aria-label="Anotar una noche a mano" style="background: #1A1A1D; border-radius: 28px 28px 0 0; padding: 12px 20px 28px; display: flex; flex-direction: column; gap: 18px">
+<div style="align-self: center; width: 32px; height: 4px; border-radius: 2px; background: #3A3A42"></div>
+<div style="display: flex; flex-direction: column; gap: 4px">
+<h2 style="margin: 0; font-size: 20px; font-weight: 600">Anotar una noche a mano</h2>
+<div style="font-size: 14px; color: #A8A8B0">Para las noches que no anotaste con el botón.</div>
+</div>
+
+<div style="display: flex; align-items: center; gap: 8px; min-height: 64px; background: #141416; border-radius: 20px; padding: 0 8px">
+<button type="button" aria-label="Noche anterior" onClick="{{ antes }}" style="width: 48px; height: 48px; border: none; border-radius: 24px; background: transparent; color: #EDEDED; cursor: pointer; display: flex; align-items: center; justify-content: center">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg>
+</button>
+<div style="flex: 1; text-align: center; display: flex; flex-direction: column; gap: 2px">
+<div style="font-size: 17px; font-weight: 500">{{ fecha }}</div>
+<div style="font-size: 13px; color: #A8A8B0">{{ noche }}</div>
+</div>
+<button type="button" aria-label="Noche siguiente" onClick="{{ despues }}" disabled="{{ esHoy }}" style="{{ estiloSiguiente }}">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"></path></svg>
+</button>
+</div>
+
+<div style="display: flex; align-items: center; gap: 12px; min-height: 72px; background: #141416; border-radius: 20px; padding: 0 16px">
+<div style="flex: 1; font-size: 16px">Dormiste</div>
+<button type="button" aria-label="15 minutos menos" onClick="{{ menos }}" style="width: 48px; height: 48px; border-radius: 24px; border: 1px solid #3A3A42; background: transparent; color: #EDEDED; font-size: 22px; font-family: inherit; cursor: pointer">−</button>
+<div style="min-width: 96px; text-align: center; font-size: 20px; font-weight: 500; font-variant-numeric: tabular-nums">{{ duracion }}</div>
+<button type="button" aria-label="15 minutos más" onClick="{{ mas }}" style="width: 48px; height: 48px; border-radius: 24px; border: 1px solid #3A3A42; background: transparent; color: #EDEDED; font-size: 22px; font-family: inherit; cursor: pointer">+</button>
+</div>
+
+<div style="font-size: 13px; line-height: 1.4; color: #A8A8B0">Cuenta como sueño en el gráfico y en la deuda de la semana. Si esa noche ya estaba anotada, la reemplaza.</div>
+
+<div style="display: flex; gap: 12px">
+<a href="Main.dc.html" style="flex: 1; height: 52px; border: 1px solid #3A3A42; border-radius: 26px; display: flex; align-items: center; justify-content: center; color: #EDEDED; font-size: 16px; font-weight: 500; text-decoration: none">Cancelar</a>
+<a href="Main.dc.html" style="flex: 1; height: 52px; border-radius: 26px; display: flex; align-items: center; justify-content: center; background: {{acento}}; color: #0B1A33; font-size: 16px; font-weight: 600; text-decoration: none">Guardar</a>
+</div>
+</section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"acento":{"editor":"color","default":"#8AB4F8","options":["#8AB4F8","#A8C7FA","#C2E7FF"]},"$preview":{"width":412,"height":892}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const acento = this.props.acento ?? '#8AB4F8';
+    const s = this.state || {};
+    const off = s.off ?? 0;
+    const min = s.min ?? 360;
+    const dias = ['sáb', 'vie', 'jue', 'mié', 'mar', 'lun', 'dom', 'sáb'];
+    const nums = [10, 9, 8, 7, 6, 5, 4, 3];
+    const fecha = (off === 0 ? 'hoy, ' : '') + dias[off] + ' ' + nums[off] + '/10';
+    const noche = 'noche del ' + dias[off + 1] + ' al ' + dias[off];
+    const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+    const dur = Math.floor(min / 60) + ' h ' + (min % 60 < 10 ? '0' : '') + (min % 60) + ' min';
+    const esHoy = off === 0;
+    return {
+      acento: acento,
+      fecha: fecha,
+      noche: noche,
+      duracion: dur,
+      esHoy: esHoy,
+      estiloSiguiente: 'width: 48px; height: 48px; border: none; border-radius: 24px; background: transparent; display: flex; align-items: center; justify-content: center; cursor: pointer; color: ' + (esHoy ? '#4A4A52' : '#EDEDED'),
+      antes: () => this.setState({ off: clamp(off + 1, 0, 6) }),
+      despues: () => this.setState({ off: clamp(off - 1, 0, 6) }),
+      menos: () => this.setState({ min: clamp(min - 15, 60, 840) }),
+      mas: () => this.setState({ min: clamp(min + 15, 60, 840) })
+    };
+  }
+}
+</script>
+</body>
+</html>
