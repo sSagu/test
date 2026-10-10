@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Tu sueño</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="width: 412px; height: 892px; box-sizing: border-box; background: #000000; color: #EDEDED; font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; padding: 8px 20px 24px; display: flex; flex-direction: column; gap: 16px">
+
+<div style="display: flex; align-items: center; justify-content: space-between; height: 56px">
+<h1 style="margin: 0; font-size: 22px; font-weight: 600; letter-spacing: 0.2px">Tu sueño</h1>
+<a href="Ajustes.dc.html" aria-label="Ajustes" style="width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; border-radius: 24px; color: #C8C8D0">
+<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"></path></svg>
+</a>
+</div>
+
+<sc-if value="{{ conAlarma }}" hint-placeholder-val="{{ true }}">
+<section style="background: #141416; border-radius: 24px; padding: 20px; display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; flex-direction: column; gap: 2px">
+<div style="font-size: 14px; color: #A8A8B0">Próxima alarma · sáb 10/10</div>
+<div style="font-size: 64px; font-weight: 300; line-height: 1.05; font-variant-numeric: tabular-nums; color: #F4F4F6">08:00</div>
+</div>
+<div style="height: 1px; background: #26262B"></div>
+<div style="display: flex; align-items: center; gap: 12px; min-height: 32px">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#A8A8B0" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"></path></svg>
+<div style="flex: 1; font-size: 15px; color: #C8C8D0">{{ avisoLabel }}</div>
+<div style="font-size: 17px; font-weight: 500; font-variant-numeric: tabular-nums">22:30</div>
+</div>
+<div style="display: flex; align-items: center; gap: 12px; min-height: 32px">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#A8A8B0" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"></path></svg>
+<div style="flex: 1; font-size: 15px; color: #C8C8D0">Acostate a las · para dormir 8 h</div>
+<div style="font-size: 17px; font-weight: 500; font-variant-numeric: tabular-nums">23:40</div>
+</div>
+</section>
+</sc-if>
+
+<sc-if value="{{ sinAlarma }}" hint-placeholder-val="{{ false }}">
+<section style="background: #141416; border-radius: 24px; padding: 24px 20px; display: flex; flex-direction: column; gap: 8px">
+<div style="font-size: 20px; font-weight: 500">No tenés alarma puesta</div>
+<div style="font-size: 15px; color: #A8A8B0; line-height: 1.4">Poné tu alarma en el Reloj, entre las 04:00 y las 12:00, y acá vas a ver a qué hora te aviso.</div>
+</section>
+</sc-if>
+
+<sc-if value="{{ esDisponible }}" hint-placeholder-val="{{ true }}">
+<div style="display: flex; flex-direction: column; gap: 10px">
+<button type="button" onClick="{{ anotar }}" style="height: 64px; border: none; border-radius: 32px; background: {{acento}}; color: #0B1A33; font-size: 18px; font-weight: 600; font-family: inherit; display: flex; align-items: center; justify-content: center; gap: 10px; cursor: pointer">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0B1A33" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"></path></svg>
+Me voy a dormir
+</button>
+<div style="text-align: center; font-size: 14px; color: #A8A8B0">Podés anotarlo hasta las 07:00</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ esAntes }}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; flex-direction: column; gap: 10px">
+<button type="button" disabled="disabled" style="height: 64px; border: 1px solid #2A2A30; border-radius: 32px; background: #101012; color: #8A8A92; font-size: 18px; font-weight: 600; font-family: inherit">Me voy a dormir</button>
+<div style="text-align: center; font-size: 14px; color: #A8A8B0">Disponible desde las 20:30</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ esAnotado }}" hint-placeholder-val="{{ false }}">
+<section style="background: #141416; border-radius: 24px; padding: 16px 16px 16px 20px; display: flex; align-items: center; gap: 14px">
+<div style="width: 40px; height: 40px; border-radius: 20px; background: {{acento}}; display: flex; align-items: center; justify-content: center; flex: none">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0B1A33" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"></path></svg>
+</div>
+<div style="flex: 1; display: flex; flex-direction: column; gap: 2px">
+<div style="font-size: 16px; font-weight: 500">Anotado: te acostaste a las 23:52</div>
+<div style="font-size: 13px; color: #A8A8B0">Si te acostás más tarde, actualizalo.</div>
+</div>
+<button type="button" onClick="{{ anotar }}" style="height: 48px; padding: 0 16px; border: 1px solid #3A3A42; border-radius: 24px; background: transparent; color: {{acento}}; font-size: 15px; font-weight: 500; font-family: inherit; cursor: pointer">Actualizar</button>
+</section>
+</sc-if>
+
+<section style="background: #141416; border-radius: 24px; padding: 20px; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; align-items: baseline; justify-content: space-between">
+<h2 style="margin: 0; font-size: 16px; font-weight: 600">Últimas 7 noches</h2>
+<div style="font-size: 13px; color: #A8A8B0">sueño estimado</div>
+</div>
+<div style="position: relative; height: 132px">
+<div style="position: absolute; left: 0; right: 0; top: 30px; border-top: 1px dashed #6B6B73"></div>
+<div style="position: absolute; right: 0; top: 12px; font-size: 12px; color: #A8A8B0">objetivo 8 h</div>
+<div style="position: absolute; left: 0; right: 0; bottom: 0; height: 1px; background: #2E2E34"></div>
+<div style="position: absolute; left: 0; right: 0; bottom: 1px; top: 0; display: flex; align-items: flex-end; gap: 2px">
+<sc-for list="{{ noches }}" as="n" hint-placeholder-count="7">
+<div role="img" aria-label="{{ n.aria }}" style="flex: 1; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 4px">
+<sc-if value="{{ n.etiqueta }}" hint-placeholder-val="{{ false }}">
+<div style="font-size: 12px; font-weight: 500; color: #EDEDED; font-variant-numeric: tabular-nums">{{ n.valor }}</div>
+</sc-if>
+<sc-if value="{{ n.tiene }}" hint-placeholder-val="{{ true }}">
+<div style="{{ n.barra }}"></div>
+</sc-if>
+<sc-if value="{{ n.vacia }}" hint-placeholder-val="{{ false }}">
+<div style="width: 12px; height: 2px; border-radius: 1px; background: #4A4A52; margin-bottom: 2px"></div>
+</sc-if>
+</div>
+</sc-for>
+</div>
+</div>
+<div style="display: flex; gap: 2px">
+<sc-for list="{{ noches }}" as="n" hint-placeholder-count="7">
+<div style="flex: 1; text-align: center; font-size: 12px; color: {{ n.diaColor }}">{{ n.dia }}</div>
+</sc-for>
+</div>
+<div style="height: 1px; background: #26262B"></div>
+<div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px">
+<div style="display: flex; flex-direction: column; gap: 2px">
+<div style="font-size: 15px; color: #C8C8D0">Deuda de sueño de la semana</div>
+<div style="font-size: 13px; color: #A8A8B0">sobre 5 noches registradas</div>
+</div>
+<div style="font-size: 20px; font-weight: 500; font-variant-numeric: tabular-nums">2 h 05 min</div>
+</div>
+</section>
+
+<div style="font-size: 12px; line-height: 1.4; color: #8A8A92; text-align: center; padding: 0 12px">Mide el tiempo que tuviste para dormir, no el sueño real.</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"estado":{"editor":"enum","options":["antes","disponible","anotado","sinalarma"],"default":"disponible"},"acento":{"editor":"color","default":"#8AB4F8","options":["#8AB4F8","#A8C7FA","#C2E7FF"]},"$preview":{"width":412,"height":892}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const estado = (this.state && this.state.estado) || this.props.estado || 'disponible';
+    const acento = this.props.acento ?? '#8AB4F8';
+    const datos = [
+      ['sáb', 'sáb 3/10', null], ['dom', 'dom 4/10', 6.67], ['lun', 'lun 5/10', 6.17],
+      ['mar', 'mar 6/10', null], ['mié', 'mié 7/10', 7.33], ['jue', 'jue 8/10', 6.83],
+      ['vie', 'vie 9/10', 7.92]
+    ];
+    const fmt = (h) => {
+      const t = Math.round(h * 60);
+      const m = t % 60;
+      return Math.floor(t / 60) + ' h ' + (m < 10 ? '0' : '') + m;
+    };
+    const ultimo = datos.length - 1;
+    const noches = datos.map((d, i) => {
+      const tiene = d[2] !== null;
+      const alto = tiene ? Math.round(d[2] / 10 * 120) : 0;
+      return {
+        dia: d[0],
+        diaColor: i === ultimo ? '#EDEDED' : '#A8A8B0',
+        tiene: tiene,
+        vacia: !tiene,
+        etiqueta: tiene && i === ultimo,
+        valor: tiene ? fmt(d[2]) : '',
+        barra: 'width: 20px; height: ' + alto + 'px; border-radius: 4px 4px 0 0; background: #5B8DE6',
+        aria: d[1] + ': ' + (tiene ? fmt(d[2]) + ' min de sueño' : 'sin registro')
+      };
+    });
+    return {
+      acento: acento,
+      noches: noches,
+      conAlarma: estado !== 'sinalarma',
+      sinAlarma: estado === 'sinalarma',
+      esAntes: estado === 'antes',
+      esDisponible: estado === 'disponible',
+      esAnotado: estado === 'anotado',
+      avisoLabel: estado === 'antes' ? 'Te aviso para prepararte a las' : 'Aviso enviado a las',
+      anotar: () => this.setState({ estado: 'anotado' })
+    };
+  }
+}
+</script>
+</body>
+</html>

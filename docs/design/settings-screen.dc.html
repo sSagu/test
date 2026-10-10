@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Ajustes</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="width: 412px; height: 892px; box-sizing: border-box; background: #000000; color: #EDEDED; font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; padding: 8px 20px 24px; display: flex; flex-direction: column; gap: 16px">
+
+<div style="display: flex; align-items: center; gap: 4px; height: 56px; margin-left: -12px">
+<a href="Main.dc.html" aria-label="Volver" style="width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; border-radius: 24px; color: #C8C8D0">
+<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg>
+</a>
+<h1 style="margin: 0; font-size: 22px; font-weight: 600">Ajustes</h1>
+</div>
+
+<section style="background: #141416; border-radius: 24px; padding: 8px 20px; display: flex; flex-direction: column">
+<div style="font-size: 13px; color: #A8A8B0; padding: 12px 0 4px">Recordatorios</div>
+<sc-for list="{{ pasos }}" as="p" hint-placeholder-count="2">
+<div style="display: flex; align-items: center; gap: 12px; min-height: 72px; border-bottom: 1px solid #26262B">
+<div style="flex: 1; display: flex; flex-direction: column; gap: 2px">
+<div style="font-size: 16px">{{ p.titulo }}</div>
+<div style="font-size: 13px; color: #A8A8B0">{{ p.rango }}</div>
+</div>
+<button type="button" aria-label="{{ p.menosLabel }}" onClick="{{ p.menos }}" style="width: 44px; height: 44px; border-radius: 22px; border: 1px solid #3A3A42; background: transparent; color: #EDEDED; font-size: 22px; font-family: inherit; cursor: pointer">−</button>
+<div style="min-width: 88px; text-align: center; font-size: 17px; font-weight: 500; font-variant-numeric: tabular-nums">{{ p.valor }}</div>
+<button type="button" aria-label="{{ p.masLabel }}" onClick="{{ p.mas }}" style="width: 44px; height: 44px; border-radius: 22px; border: 1px solid #3A3A42; background: transparent; color: #EDEDED; font-size: 22px; font-family: inherit; cursor: pointer">+</button>
+</div>
+</sc-for>
+<sc-for list="{{ llavesRec }}" as="t" hint-placeholder-count="3">
+<div style="display: flex; align-items: center; gap: 12px; min-height: 56px">
+<div style="flex: 1; font-size: 16px">{{ t.titulo }}</div>
+<button type="button" role="switch" aria-checked="{{ t.on }}" aria-label="{{ t.titulo }}" onClick="{{ t.toggle }}" style="{{ t.pista }}">
+<div style="{{ t.perilla }}"></div>
+</button>
+</div>
+</sc-for>
+</section>
+
+<section style="background: #141416; border-radius: 24px; padding: 8px 20px; display: flex; flex-direction: column">
+<div style="font-size: 13px; color: #A8A8B0; padding: 12px 0 4px">Fin de semana y alarmas</div>
+<sc-for list="{{ llavesOtras }}" as="t" hint-placeholder-count="3">
+<div style="display: flex; align-items: center; gap: 12px; min-height: 56px">
+<div style="flex: 1; font-size: 16px">{{ t.titulo }}</div>
+<button type="button" role="switch" aria-checked="{{ t.on }}" aria-label="{{ t.titulo }}" onClick="{{ t.toggle }}" style="{{ t.pista }}">
+<div style="{{ t.perilla }}"></div>
+</button>
+</div>
+</sc-for>
+</section>
+
+<button type="button" style="height: 52px; border: 1px solid #3A2A2A; border-radius: 26px; background: transparent; color: #F2A39C; font-size: 16px; font-weight: 500; font-family: inherit; cursor: pointer">Borrar registro de noches</button>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"acento":{"editor":"color","default":"#8AB4F8","options":["#8AB4F8","#A8C7FA","#C2E7FF"]},"$preview":{"width":412,"height":892}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const acento = this.props.acento ?? '#8AB4F8';
+    const s = this.state || {};
+    const lead = s.lead ?? 570;
+    const target = s.target ?? 480;
+    const on = (k, def) => (s[k] === undefined ? def : s[k]);
+    const dur = (min) => Math.floor(min / 60) + ' h ' + (min % 60 < 10 ? '0' : '') + (min % 60) + ' min';
+    const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+    const llave = (k, titulo, def) => {
+      const v = on(k, def);
+      return {
+        titulo: titulo,
+        on: v ? 'true' : 'false',
+        toggle: () => this.setState({ [k]: !v }),
+        pista: 'width: 52px; height: 32px; border-radius: 16px; border: none; padding: 0 4px; display: flex; align-items: center; cursor: pointer; justify-content: ' + (v ? 'flex-end' : 'flex-start') + '; background: ' + (v ? acento : '#3A3A42'),
+        perilla: 'width: 24px; height: 24px; border-radius: 12px; background: ' + (v ? '#0B1A33' : '#C8C8D0')
+      };
+    };
+    return {
+      pasos: [
+        { titulo: 'Avisarme antes de la alarma', rango: 'entre 8 h y 11 h', valor: dur(lead),
+          menosLabel: 'Avisarme 15 minutos antes', masLabel: 'Avisarme 15 minutos después',
+          menos: () => this.setState({ lead: clamp(lead - 15, 480, 660) }),
+          mas: () => this.setState({ lead: clamp(lead + 15, 480, 660) }) },
+        { titulo: 'Horas de sueño objetivo', rango: 'entre 7 h y 9 h', valor: dur(target),
+          menosLabel: 'Bajar 15 minutos el objetivo', masLabel: 'Subir 15 minutos el objetivo',
+          menos: () => this.setState({ target: clamp(target - 15, 420, 540) }),
+          mas: () => this.setState({ target: clamp(target + 15, 420, 540) }) }
+      ],
+      llavesRec: [
+        llave('enabled', 'Activar recordatorios', true),
+        llave('late', 'Avisar si la alarma quedó cerca', true),
+        llave('winddown', 'Aviso previo de preparación', false)
+      ],
+      llavesOtras: [
+        llave('jetlag', 'Sugerencias para el finde', true),
+        llave('noalarm', 'Sugerir hora de levantarme si no hay alarma', true),
+        llave('onlyclock', 'Solo alarmas del Reloj', true)
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>
