@@ -83,11 +83,12 @@ if grep -Eq 'allowBackup.*=false' <<<"$xmltree"; then ok "allowBackup=false"; el
 
 # Every receiver must be exported=false; only the launcher activity may be exported=true.
 rx=$(awk '
-  /E: receiver/ { if (blk) flush(); blk = 1; kind = "receiver"; ex = "none"; next }
-  /E: activity/ { if (blk) flush(); blk = 1; kind = "activity"; ex = "none"; next }
+  /E: receiver/ { if (blk) flush(); blk = 1; kind = "receiver"; ex = "none"; nm = "?"; next }
+  /E: activity/ { if (blk) flush(); blk = 1; kind = "activity"; ex = "none"; nm = "?"; next }
   /E: / { if (blk) flush(); blk = 0; next }
   blk && /exported/ { ex = ($0 ~ /=true/) ? "true" : (($0 ~ /=false/) ? "false" : "other") }
-  function flush() { print kind, ex }
+  blk && /android:name\(/ { n = $0; sub(/.*android:name\([^)]*\)="/, "", n); sub(/".*/, "", n); nm = n }
+  function flush() { print kind, ex, nm }
   END { if (blk) flush() }
 ' <<<"$xmltree")
 bad_rx=$(awk '$1=="receiver" && $2!="false" {print}' <<<"$rx")
@@ -101,6 +102,35 @@ if grep -Eq 'exported.*=true' <<<"$xmltree"; then
   fi
 else
   bad "no exported=true found; launcher activity expected to be exported"
+fi
+
+# v2: exactly two activities. The launcher (MainActivity) is the only exported one; every
+# other activity (SettingsActivity) must carry an explicit exported=false.
+n_act=$(awk '$1=="activity"' <<<"$rx" | grep -c . || true)
+act_true=$(awk '$1=="activity" && $2=="true" {print $3}' <<<"$rx")
+act_bad=$(awk '$1=="activity" && $2!="true" && $2!="false" {print}' <<<"$rx")
+if [ "$n_act" -eq 2 ] && [ "$(grep -c . <<<"$act_true")" -eq 1 ] && grep -q 'MainActivity$' <<<"$act_true" && [ -z "$act_bad" ]; then
+  ok "activities: MainActivity exported launcher + 1 explicit exported=false"
+else
+  bad "activity export problems: count=$n_act exported=[${act_true}] implicit=[${act_bad}]"
+fi
+if awk '$1=="activity" && $3 ~ /SettingsActivity$/ && $2=="false"' <<<"$rx" | grep -q .; then
+  ok "SettingsActivity exported=false"
+else
+  bad "SettingsActivity missing or not exported=false"
+fi
+sa_filter=$(awk '
+  /E: / { ind = index($0, "E:"); if (insa && ind <= saind) insa = 0
+          if (insa && $0 ~ /E: intent-filter/) found = 1
+          if ($0 ~ /E: activity/) { cand = 1; candind = ind } else { cand = 0 }
+          next }
+  cand && /android:name\(/ && /SettingsActivity"/ { insa = 1; saind = candind }
+  END { print found + 0 }
+' <<<"$xmltree")
+if [ "$sa_filter" != "0" ]; then
+  bad "SettingsActivity must not declare an intent-filter"
+else
+  ok "SettingsActivity has no intent-filter"
 fi
 
 # --- signature ------------------------------------------------------------

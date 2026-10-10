@@ -16,6 +16,17 @@
  * (sg_core does). */
 int sg_log_bed_tap(SgState *s, int64_t now_ms, int64_t T_ms);
 
+/* v2. bed_ms of the newest record if it is open (closed == 0) and its wake_ms == T_ms
+ * with T_ms > 0 ("this night is already logged for alarm T"); otherwise 0. NULL -> 0. */
+int64_t sg_log_open_bed_for(const SgState *s, int64_t T_ms);
+
+/* v2 bed tap used by sg_core for BOTH the in-app button and the notification action.
+ * If sg_log_open_bed_for(s, T_ms) > 0: set that record's bed_ms = max(bed_ms, now_ms),
+ * leave wake_ms/closed unchanged, return 2 if bed_ms changed else 0 (never appends, at
+ * any distance in time: this is the "Actualizar" re-tap). Otherwise: exactly
+ * sg_log_bed_tap(s, now_ms, T_ms). NULL or now_ms <= 0 -> 0. */
+int sg_log_bed_retap(SgState *s, int64_t now_ms, int64_t T_ms);
+
 /* Make the open record (if any) follow a changed T (0 = alarm removed -> wake 0). */
 void sg_log_follow_alarm(SgState *s, int64_t T_ms);
 

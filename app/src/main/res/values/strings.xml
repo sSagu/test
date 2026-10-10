@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Sueño-Guía UI strings (es-AR). Verbatim copy of docs/ADVICE-features.md §5 (card J2). -->
+<!-- Sueño-Guía UI strings (es-AR). v1: verbatim copy of docs/ADVICE-features.md §5.
+     v2 block at the end: docs/ADVICE-v2.md (contract; operators do not edit). -->
 <resources>
     <string name="str_app_name">Sueño-Guía</string>
     <string name="str_ch_reminder_name">Recordatorio para dormir</string>
@@ -77,4 +78,73 @@
         <item>vie</item>
         <item>sáb</item>
     </string-array>
+
+    <!-- ===================== v2 (docs/ADVICE-v2.md) ===================== -->
+    <!-- formatting -->
+    <string name="str_fmt_duration_hours">%1$d h</string>
+    <string name="str_fmt_duration_short">%1$d h %2$02d</string>
+
+    <!-- top bars / navigation -->
+    <string name="str_cd_settings">Ajustes</string>
+    <string name="str_cd_back">Volver</string>
+
+    <!-- hero: alarm card (SG_HERO_ALARM) -->
+    <string name="str_hero_alarm_day">Próxima alarma · %1$s</string>
+    <string name="str_remind_upcoming">Te aviso para prepararte a las</string>
+    <string name="str_remind_sent">Aviso enviado a las</string>
+    <string name="str_remind_none">Sin aviso esta noche</string>
+    <string name="str_bed_suggest_label">Acostate a las · para dormir %1$s</string>
+
+    <!-- hero: message card (title, body) per SG_HERO_* -->
+    <string name="str_hero_none_title">No tenés alarma puesta</string>
+    <string name="str_hero_none_body">Poné tu alarma en el Reloj, entre las 04:00 y las 12:00, y acá vas a ver a qué hora te aviso.</string>
+    <string name="str_hero_other_title">Hay una alarma de otra app a las %1$s</string>
+    <string name="str_hero_other_body">Solo tengo en cuenta las alarmas del Reloj. Podés cambiarlo en Ajustes.</string>
+    <string name="str_hero_window_title">Tu próxima alarma es a las %1$s</string>
+    <string name="str_hero_window_body">Solo te aviso para alarmas entre las 04:00 y las 12:00.</string>
+    <string name="str_hero_far_title">Próxima alarma: %1$s a las %2$s</string>
+    <string name="str_hero_far_body">Cuando falte menos de un día y medio, acá vas a ver a qué hora te aviso.</string>
+    <string name="str_hero_off_title">Los recordatorios están apagados</string>
+    <string name="str_hero_off_body">Podés activarlos en Ajustes.</string>
+
+    <!-- bedtime control (SG_BED_*) -->
+    <string name="str_bed_button">Me voy a dormir</string>
+    <string name="str_bed_before">Disponible desde las %1$s</string>
+    <string name="str_bed_available">Podés anotarlo hasta las %1$s</string>
+    <string name="str_bed_closed">El registro de esta noche cerró a las %1$s</string>
+    <string name="str_bed_logged">Anotado: te acostaste a las %1$s</string>
+    <string name="str_bed_logged_sub">Si te acostás después, actualizalo.</string>
+    <string name="str_bed_logged_done">Que descanses.</string>
+    <string name="str_bed_update">Actualizar</string>
+    <string name="str_cd_bed_update">Actualizar la hora en que te acostaste</string>
+
+    <!-- week card -->
+    <string name="str_week_unit">sueño estimado</string>
+    <string name="str_week_target">objetivo %1$s</string>
+    <string name="str_cd_night_value">%1$s: %2$s de sueño</string>
+    <string name="str_cd_night_empty">%1$s: sin registro</string>
+    <string name="str_cd_night_nowake">%1$s: sin alarma, no se puede calcular</string>
+    <plurals name="str_debt_over_nights">
+        <item quantity="one">sobre %1$d noche registrada</item>
+        <item quantity="many">sobre %1$d noches registradas</item>
+        <item quantity="other">sobre %1$d noches registradas</item>
+    </plurals>
+    <string name="str_debt_empty">Todavía no hay noches registradas.</string>
+    <string name="str_debt_none">Sin deuda</string>
+    <string name="str_footnote">Mide el tiempo que tuviste para dormir, no el sueño real.</string>
+
+    <!-- settings screen -->
+    <string name="str_settings_section_reminders">Recordatorios</string>
+    <string name="str_settings_section_weekend">Fin de semana y alarmas</string>
+    <string name="str_settings_lead_range">entre 8 h y 11 h</string>
+    <string name="str_settings_target_range">entre 7 h y 9 h</string>
+    <string name="str_settings_winddown_range">entre 15 y 60 min</string>
+    <string name="str_cd_lead_minus">Avisarme 15 minutos más cerca de la alarma</string>
+    <string name="str_cd_lead_plus">Avisarme 15 minutos más temprano</string>
+    <string name="str_cd_target_minus">Bajar 15 minutos el objetivo</string>
+    <string name="str_cd_target_plus">Subir 15 minutos el objetivo</string>
+    <string name="str_cd_winddown_minus">Bajar 15 minutos la anticipación</string>
+    <string name="str_cd_winddown_plus">Subir 15 minutos la anticipación</string>
+    <string name="str_step_minus">−</string>
+    <string name="str_step_plus">+</string>
 </resources>

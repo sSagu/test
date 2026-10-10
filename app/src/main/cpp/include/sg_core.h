@@ -19,6 +19,32 @@
  *     schedule SG_ALARM_HOUSEKEEP at wake_ms+1min if a record is open, and
  *     SG_ALARM_F5_NOALARM at next Fri/Sat 21:30 when jetlag_noalarm is on;
  *  6. if !enabled: cancel every alarm id and every notification kind and return.
+ *
+ * v2 additions (docs/ADVICE-v2.md is the authority; summary):
+ *  L. "Logged means handled": in the relevant-alarm branch, after the T-changed
+ *     bookkeeping (which includes sg_log_follow_alarm) and before any F1/F2/debounce
+ *     decision, if sg_log_open_bed_for(s, T) > 0 then set last_f1_for_T = last_f2_for_T
+ *     = T, clear the debounce, make sure SG_ALARM_F1/SG_ALARM_F2/SG_ALARM_DEBOUNCE are
+ *     cancelled, and schedule nothing else for this T (the tail of step 5 still runs).
+ *  R. Reboot re-post: only when reason is SG_REASON_BOOT or SG_REASON_PKG_REPLACED, T is
+ *     relevant and unchanged (T == last_seen_T), last_f1_for_T == T, (SG_FLAG_F1_POSTED
+ *     set or snooze_count > 0), sg_log_open_bed_for(s, T) == 0, now is inside the bed
+ *     window [T - lead - SG_BED_WINDOW_BEFORE_MIN, T - SG_BED_WINDOW_AFTER_MIN], and
+ *     0 <= now - last_notified_ms < SG_F1_TIMEOUT_MIN: emit ONE SG_CMD_NOTIFY for SG_NK_F1
+ *     with the same variant/args fire_f1 would use at `now`, actions SG_ACT_SLEEP
+ *     (| SG_ACT_SNOOZE if snooze_count < SG_SNOOZE_MAX) | SG_NOTIFY_SILENT, timeout =
+ *     SG_F1_TIMEOUT_MIN - minutes elapsed since last_notified_ms (>= 1); set
+ *     SG_FLAG_F1_POSTED. last_notified_ms, last_f1_for_T, snooze_count, F5 samples are NOT
+ *     touched. Every other reason (RECHECK, APP_OPEN, BROADCAST, ...) never re-posts.
+ *
+ * sg_core_action(SG_ACTION_SLEEP), v2: when enabled, T relevant and now inside the bed
+ * window: r = sg_log_bed_retap(s, now, T); r == 1 -> sample_if_weekday(T); r != 0 ->
+ * schedule housekeeping; then ALWAYS (in window) set last_f1_for_T = last_f2_for_T = T,
+ * clear the debounce, cancel alarms SG_ALARM_F1 (pending F1 or snooze), SG_ALARM_F2,
+ * SG_ALARM_DEBOUNCE, cancel notifications SG_NK_F1, SG_NK_F2, SG_NK_F3 and clear
+ * SG_FLAG_F1_POSTED. Outside the window (or T not relevant): unchanged v1 behaviour
+ * (cancel SG_NK_F1 + SG_NK_F3 notifications, clear SG_FLAG_F1_POSTED, log nothing).
+ * The in-app button and the notification action use this same path.
  */
 #ifndef SG_CORE_H
 #define SG_CORE_H
@@ -114,7 +140,63 @@ typedef struct {
     int32_t weekday_ref_mod;  /* -1 if invalid */
     SgWeek  week;
     int32_t settings[12];     /* settings[key] = sg_core_get(key) for key 1..11, [0] unused */
+
+    /* ---- v2 fields (docs/ADVICE-v2.md section 3). Flattened AFTER the v1 66 words. ---- */
+    int32_t hero;             /* SG_HERO_* : which top card the main screen shows */
+    int32_t alarm_wday;       /* 0=Sunday..6 of local date of T when alarm_rel != NONE, else -1 */
+    int32_t remind_state;     /* SG_REMIND_* (F1 row of the hero card) */
+    int32_t remind_mod;       /* UPCOMING: mod of T - lead; SENT: mod of last_notified_ms; else -1 */
+    int32_t bed_state;        /* SG_BED_* (the "Me voy a dormir" control) */
+    int32_t bed_mod;          /* BEFORE: mod of window start; AVAILABLE/CLOSED: mod of window
+                                 end; LOGGED: mod of the logged bed_ms; HIDDEN: -1 */
+    int32_t bed_can_update;   /* 1 iff LOGGED and now is inside the bed window ("Actualizar") */
+    int32_t debt_state;       /* SG_DEBT_* */
+    int32_t notif_banner;     /* 1 iff enabled && !o->notif_allowed */
+    int32_t ask_notif;        /* 1 iff !o->notif_allowed && !SG_FLAG_NOTIF_PROMPTED */
+    int32_t target_permille;  /* target_sleep_min * 1000 / SG_UI_CHART_MAX_MIN (dashed line) */
+    int32_t label_night;      /* largest i in 0..6 with week.night[i].status == 1, else -1 */
+    int32_t bar_permille[SG_DEBT_WINDOW_NIGHTS]; /* status==1: min(max(est,0),MAX)*1000/MAX
+                                                    (integer division, 0..1000); else -1 */
 } SgUiModel;
+
+/* Chart scale: a full-height bar is 10 h of estimated sleep. */
+#define SG_UI_CHART_MAX_MIN 600
+
+/* hero: priority top to bottom (first match wins) */
+enum {
+    SG_HERO_NO_ALARM     = 0,  /* enabled, alarm_rel == SG_REL_NONE */
+    SG_HERO_ALARM        = 1,  /* enabled, SG_REL_OK: alarm card with bell/moon rows */
+    SG_HERO_OTHER_APP    = 2,  /* enabled, SG_REL_OTHER_APP (alarm_mod = that alarm) */
+    SG_HERO_OUT_OF_WINDOW= 3,  /* enabled, SG_REL_WINDOW */
+    SG_HERO_FAR          = 4,  /* enabled, SG_REL_HORIZON (> 36 h away) */
+    SG_HERO_DISABLED     = 5   /* master toggle off (checked FIRST, any alarm_rel) */
+};
+
+/* remind_state: only for SG_HERO_ALARM, otherwise SG_REMIND_HIDDEN. f1 = T - lead. */
+enum {
+    SG_REMIND_HIDDEN   = 0,
+    SG_REMIND_UPCOMING = 1,  /* last_f1_for_T != T && now <= f1 + SG_F1_GRACE_MIN */
+    SG_REMIND_SENT     = 2,  /* last_f1_for_T == T && f1 - SG_BED_WINDOW_BEFORE_MIN <=
+                                last_notified_ms <= now && last_notified_ms < T */
+    SG_REMIND_NONE     = 3   /* any other case (alarm set late, logged before F1, ...) */
+};
+
+/* bed_state: HIDDEN unless enabled && alarm_rel == SG_REL_OK. lo = T - lead -
+ * SG_BED_WINDOW_BEFORE_MIN, hi = T - SG_BED_WINDOW_AFTER_MIN (same window as the action). */
+enum {
+    SG_BED_HIDDEN    = 0,
+    SG_BED_BEFORE    = 1,  /* not logged, now < lo */
+    SG_BED_AVAILABLE = 2,  /* not logged, lo <= now <= hi */
+    SG_BED_LOGGED    = 3,  /* sg_log_open_bed_for(s, T) > 0 (checked first) */
+    SG_BED_CLOSED    = 4   /* not logged, now > hi */
+};
+
+/* debt_state */
+enum {
+    SG_DEBT_EMPTY = 0,     /* week.logged_count == 0 */
+    SG_DEBT_ZERO  = 1,     /* logged_count > 0 && debt_min == 0 */
+    SG_DEBT_SOME  = 2      /* debt_min > 0 */
+};
 
 int sg_core_ui(const SgState *s, const SgObs *o, SgUiModel *out);
 
@@ -127,7 +209,13 @@ enum {
     SG_UI_SETTINGS = 12,           /* 12 slots: [12 + key] */
     SG_UI_NIGHTS = 24,             /* 7 nights x SG_UI_NIGHT_WORDS */
     SG_UI_NIGHT_WORDS = 6,         /* date, wday, status, bed_mod, wake_mod, est_sleep_min */
-    SG_UI_LEN = 24 + 7 * 6         /* 66 */
+    /* v2, appended (v1 indices above never move) */
+    SG_UI_HERO = 66, SG_UI_ALARM_WDAY = 67, SG_UI_REMIND_STATE = 68, SG_UI_REMIND_MOD = 69,
+    SG_UI_BED_STATE = 70, SG_UI_BED_MOD = 71, SG_UI_BED_CAN_UPDATE = 72,
+    SG_UI_DEBT_STATE = 73, SG_UI_NOTIF_BANNER = 74, SG_UI_ASK_NOTIF = 75,
+    SG_UI_TARGET_PERMILLE = 76, SG_UI_LABEL_NIGHT = 77,
+    SG_UI_BARS = 78,               /* 7 words: bar_permille[0..6], oldest first */
+    SG_UI_LEN = 85
 };
 /* Fill out[SG_UI_LEN] from m. */
 void sg_core_ui_flatten(const SgUiModel *m, int64_t out[SG_UI_LEN]);

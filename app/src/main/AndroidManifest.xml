@@ -29,6 +29,7 @@
         android:memtagMode="async"
         android:usesCleartextTraffic="false"
         android:theme="@style/Theme.SG"
+        android:enableOnBackInvokedCallback="true"
         android:supportsRtl="false">
 
         <!-- UI. Content intent of notifications targets this with ACTION_MAIN +
@@ -44,6 +45,16 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- v2 settings screen (docs/ADVICE-v2.md section 6). Started only by MainActivity
+             with an explicit Intent; no intent-filter, never reachable from other apps.
+             Back (system gesture with predictive animation, or the in-screen arrow) is a
+             plain finish(); parentActivityName documents the hierarchy. -->
+        <activity
+            android:name=".SettingsActivity"
+            android:exported="false"
+            android:label="@string/str_settings_title"
+            android:parentActivityName=".MainActivity" />
 
         <!-- System re-read triggers. All sent by the system, so exported=false is enough. -->
         <receiver

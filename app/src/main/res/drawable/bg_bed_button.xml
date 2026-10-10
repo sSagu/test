@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Background of btn_bed: follows View#setEnabled. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_enabled="false" android:drawable="@drawable/bg_pill_disabled" />
+    <item android:drawable="@drawable/bg_pill_primary" />
+</selector>

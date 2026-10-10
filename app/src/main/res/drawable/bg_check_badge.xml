@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 40 dp accent circle behind ic_check in the "Anotado" card. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="oval">
+    <solid android:color="@color/sg_accent" />
+    <size android:width="@dimen/sg_badge" android:height="@dimen/sg_badge" />
+</shape>

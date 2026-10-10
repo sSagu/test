@@ -1,49 +1,327 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Theme and widget/text styles for the approved v2 design (docs/design/README.md).
+     Contract file: operators reference these styles, they do not edit them.
+     Parent is plain Material (not DeviceDefault) so vendor widget skins cannot override
+     the switch/button drawables below. -->
 <resources>
-    <style name="Theme.SG" parent="android:Theme.DeviceDefault.NoActionBar">
-        <item name="android:windowBackground">@color/sg_black</item>
-        <item name="android:colorBackground">@color/sg_black</item>
-        <item name="android:textColorPrimary">@color/sg_text</item>
+    <style name="Theme.SG" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/sg_ground</item>
+        <item name="android:colorBackground">@color/sg_ground</item>
+        <item name="android:textColorPrimary">@color/sg_text_primary</item>
+        <item name="android:textColorSecondary">@color/sg_text_muted</item>
         <item name="android:colorAccent">@color/sg_accent</item>
-        <item name="android:statusBarColor">@color/sg_black</item>
-        <item name="android:navigationBarColor">@color/sg_black</item>
+        <item name="android:colorControlActivated">@color/sg_accent</item>
+        <item name="android:colorControlHighlight">@color/sg_ripple</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
         <item name="android:enforceStatusBarContrast">false</item>
+        <item name="android:enforceNavigationBarContrast">false</item>
         <item name="android:isLightTheme">false</item>
     </style>
 
-    <style name="SgNightRow">
+    <!-- ===== layout containers ===== -->
+
+    <!-- Root content column inside the ScrollView (insets are added in Java on the ScrollView). -->
+    <style name="SgScreenColumn">
         <item name="android:layout_width">match_parent</item>
         <item name="android:layout_height">wrap_content</item>
-        <item name="android:layout_marginTop">@dimen/sg_space_row</item>
-        <item name="android:textColor">@color/sg_text</item>
-        <item name="android:textSize">@dimen/sg_text_body</item>
+        <item name="android:orientation">vertical</item>
+        <item name="android:paddingStart">@dimen/sg_screen_pad_h</item>
+        <item name="android:paddingEnd">@dimen/sg_screen_pad_h</item>
+        <item name="android:paddingTop">@dimen/sg_screen_pad_top</item>
+        <item name="android:paddingBottom">@dimen/sg_screen_pad_bottom</item>
     </style>
 
-    <style name="SgSwitch">
+    <!-- Top bar row: 56 dp, centred vertically. -->
+    <style name="SgTopBar">
         <item name="android:layout_width">match_parent</item>
-        <item name="android:layout_height">@dimen/sg_touch_min</item>
-        <item name="android:minHeight">@dimen/sg_touch_min</item>
-        <item name="android:layout_marginTop">@dimen/sg_space_row</item>
-        <item name="android:textColor">@color/sg_text</item>
-        <item name="android:textSize">@dimen/sg_text_body</item>
-    </style>
-
-    <style name="SgStepRow">
-        <item name="android:layout_width">match_parent</item>
-        <item name="android:layout_height">@dimen/sg_touch_min</item>
-        <item name="android:layout_marginTop">@dimen/sg_space_row</item>
+        <item name="android:layout_height">@dimen/sg_topbar_h</item>
         <item name="android:orientation">horizontal</item>
         <item name="android:gravity">center_vertical</item>
     </style>
 
-    <style name="SgStepButton">
+    <!-- Main-screen card: #141416, radius 24, padding 20, 16 dp above. -->
+    <style name="SgCard">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginTop">@dimen/sg_gap</item>
+        <item name="android:orientation">vertical</item>
+        <item name="android:background">@drawable/bg_card</item>
+        <item name="android:padding">@dimen/sg_card_pad</item>
+    </style>
+
+    <!-- Settings card: padding 8 dp vertical, 20 dp horizontal. -->
+    <style name="SgCard.Settings">
+        <item name="android:paddingTop">@dimen/sg_card_pad_settings_v</item>
+        <item name="android:paddingBottom">@dimen/sg_card_pad_settings_v</item>
+        <item name="android:paddingStart">@dimen/sg_card_pad</item>
+        <item name="android:paddingEnd">@dimen/sg_card_pad</item>
+    </style>
+
+    <style name="SgDivider">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">@dimen/sg_divider_h</item>
+        <item name="android:background">@color/sg_divider</item>
+    </style>
+
+    <!-- Hero row (bell / moon): icon, flexible label, time value. -->
+    <style name="SgHeroRow">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginTop">@dimen/sg_gap</item>
+        <item name="android:minHeight">@dimen/sg_hero_row_min</item>
+        <item name="android:orientation">horizontal</item>
+        <item name="android:gravity">center_vertical</item>
+    </style>
+
+    <style name="SgHeroRowIcon">
+        <item name="android:layout_width">@dimen/sg_icon_row</item>
+        <item name="android:layout_height">@dimen/sg_icon_row</item>
+        <item name="android:layout_marginEnd">@dimen/sg_hero_row_gap</item>
+        <item name="android:tint">@color/sg_text_muted</item>
+        <item name="android:importantForAccessibility">no</item>
+    </style>
+
+    <!-- Settings stepper row (min 72 dp) and switch row (min 56 dp). -->
+    <style name="SgStepRow">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:minHeight">@dimen/sg_row_stepper_min</item>
+        <item name="android:orientation">horizontal</item>
+        <item name="android:gravity">center_vertical</item>
+    </style>
+
+    <!-- ===== text ===== -->
+
+    <style name="SgText">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:textColor">@color/sg_text_primary</item>
+        <item name="android:textSize">@dimen/sg_ts_body</item>
+    </style>
+    <!-- "Tu sueño" / "Ajustes": 22 sp semibold -->
+    <style name="SgText.Title">
+        <item name="android:textSize">@dimen/sg_ts_title</item>
+        <item name="android:textFontWeight">600</item>
+        <item name="android:accessibilityHeading">true</item>
+    </style>
+    <!-- "Próxima alarma · sáb 10/10": 14 sp muted -->
+    <style name="SgText.Label">
+        <item name="android:textSize">@dimen/sg_ts_label</item>
+        <item name="android:textColor">@color/sg_text_muted</item>
+    </style>
+    <!-- 64 sp light, tabular figures -->
+    <style name="SgText.AlarmTime">
+        <item name="android:textSize">@dimen/sg_ts_alarm</item>
+        <item name="android:fontFamily">sans-serif-light</item>
+        <item name="android:fontFeatureSettings">tnum</item>
+        <item name="android:textColor">@color/sg_text_strong</item>
+        <item name="android:includeFontPadding">false</item>
+    </style>
+    <!-- hero row label: 15 sp secondary -->
+    <style name="SgText.Row">
+        <item name="android:textSize">@dimen/sg_ts_row</item>
+        <item name="android:textColor">@color/sg_text_secondary</item>
+    </style>
+    <!-- hero row time: 17 sp medium, tabular -->
+    <style name="SgText.RowValue">
+        <item name="android:textSize">@dimen/sg_ts_row_value</item>
+        <item name="android:textFontWeight">500</item>
+        <item name="android:fontFeatureSettings">tnum</item>
+    </style>
+    <!-- "Últimas 7 noches": 16 sp semibold -->
+    <style name="SgText.Section">
+        <item name="android:textSize">@dimen/sg_ts_section</item>
+        <item name="android:textFontWeight">600</item>
+        <item name="android:accessibilityHeading">true</item>
+    </style>
+    <!-- settings card header ("Recordatorios"): 13 sp muted, 12 dp top / 4 dp bottom -->
+    <style name="SgText.CardHeader">
+        <item name="android:textSize">@dimen/sg_ts_small</item>
+        <item name="android:textColor">@color/sg_text_muted</item>
+        <item name="android:paddingTop">12dp</item>
+        <item name="android:paddingBottom">4dp</item>
+        <item name="android:accessibilityHeading">true</item>
+    </style>
+    <!-- 13 sp muted secondary lines (sub-labels, ranges) -->
+    <style name="SgText.Small">
+        <item name="android:textSize">@dimen/sg_ts_small</item>
+        <item name="android:textColor">@color/sg_text_muted</item>
+    </style>
+    <!-- chart day letters and "objetivo 8 h": 12 sp muted -->
+    <style name="SgText.Chart">
+        <item name="android:textSize">@dimen/sg_ts_chart</item>
+        <item name="android:textColor">@color/sg_text_muted</item>
+    </style>
+    <!-- value label over the latest bar: 12 sp medium primary, tabular -->
+    <style name="SgText.ChartValue">
+        <item name="android:textSize">@dimen/sg_ts_chart</item>
+        <item name="android:textFontWeight">500</item>
+        <item name="android:fontFeatureSettings">tnum</item>
+    </style>
+    <!-- debt value: 20 sp medium, tabular -->
+    <style name="SgText.Debt">
+        <item name="android:textSize">@dimen/sg_ts_debt</item>
+        <item name="android:textFontWeight">500</item>
+        <item name="android:fontFeatureSettings">tnum</item>
+    </style>
+    <!-- message-card title (no alarm, other app, ...): 20 sp medium -->
+    <style name="SgText.HeroMsgTitle">
+        <item name="android:textSize">@dimen/sg_ts_hero_msg</item>
+        <item name="android:textFontWeight">500</item>
+    </style>
+    <!-- message-card body: 15 sp muted, 1.4 line height -->
+    <style name="SgText.HeroMsgBody">
+        <item name="android:textSize">@dimen/sg_ts_row</item>
+        <item name="android:textColor">@color/sg_text_muted</item>
+        <item name="android:lineSpacingMultiplier">1.3</item>
+    </style>
+    <!-- "Anotado: te acostaste a las 23:52": 16 sp medium -->
+    <style name="SgText.Logged">
+        <item name="android:textSize">@dimen/sg_ts_body</item>
+        <item name="android:textFontWeight">500</item>
+    </style>
+    <!-- centred hint under the pill: 14 sp muted -->
+    <style name="SgText.Hint">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:textSize">@dimen/sg_ts_label</item>
+        <item name="android:textColor">@color/sg_text_muted</item>
+        <item name="android:gravity">center_horizontal</item>
+    </style>
+    <!-- footnote: 12 sp #8A8A92 centred, 12 dp side padding -->
+    <style name="SgText.Foot">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:textSize">@dimen/sg_ts_foot</item>
+        <item name="android:textColor">@color/sg_text_foot</item>
+        <item name="android:gravity">center_horizontal</item>
+        <item name="android:paddingStart">12dp</item>
+        <item name="android:paddingEnd">12dp</item>
+        <item name="android:lineSpacingMultiplier">1.3</item>
+    </style>
+    <!-- settings row title: 16 sp primary -->
+    <style name="SgText.SettingTitle">
+        <item name="android:textSize">@dimen/sg_ts_body</item>
+    </style>
+    <!-- stepper value: 17 sp medium tabular, min width 88 dp, centred -->
+    <style name="SgText.StepValue">
+        <item name="android:minWidth">@dimen/sg_stepper_value_min_w</item>
+        <item name="android:gravity">center</item>
+        <item name="android:textSize">@dimen/sg_ts_row_value</item>
+        <item name="android:textFontWeight">500</item>
+        <item name="android:fontFeatureSettings">tnum</item>
+    </style>
+
+    <!-- ===== buttons and controls ===== -->
+
+    <!-- Gear (main) and back arrow (settings): 48 dp, borderless ripple, 24 dp icon. -->
+    <style name="SgIconButton">
         <item name="android:layout_width">@dimen/sg_touch_min</item>
         <item name="android:layout_height">@dimen/sg_touch_min</item>
+        <item name="android:background">@drawable/bg_icon_button</item>
+        <item name="android:scaleType">center</item>
+        <item name="android:tint">@color/sg_text_secondary</item>
+    </style>
+
+    <!-- "Me voy a dormir" pill: apply to a clickable horizontal LinearLayout (btn_bed). -->
+    <style name="SgBedButton">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">@dimen/sg_pill_h</item>
+        <item name="android:orientation">horizontal</item>
+        <item name="android:gravity">center</item>
+        <item name="android:background">@drawable/bg_bed_button</item>
+        <item name="android:clickable">true</item>
+        <item name="android:focusable">true</item>
+    </style>
+    <!-- children of btn_bed (follow the parent's enabled state) -->
+    <style name="SgBedButtonIcon">
+        <item name="android:layout_width">@dimen/sg_icon_button</item>
+        <item name="android:layout_height">@dimen/sg_icon_button</item>
+        <item name="android:layout_marginEnd">@dimen/sg_pill_gap</item>
+        <item name="android:src">@drawable/ic_moon_outline</item>
+        <item name="android:tint">@color/sg_bed_button_fg</item>
+        <item name="android:duplicateParentState">true</item>
+        <item name="android:importantForAccessibility">no</item>
+    </style>
+    <style name="SgBedButtonText">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:textSize">@dimen/sg_ts_button</item>
+        <item name="android:textFontWeight">600</item>
+        <item name="android:textColor">@color/sg_bed_button_fg</item>
+        <item name="android:duplicateParentState">true</item>
+    </style>
+
+    <!-- Outline secondary button: 48 dp, accent text 15 sp medium. -->
+    <style name="SgButtonOutline">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">@dimen/sg_btn_outline_h</item>
         <item name="android:minWidth">@dimen/sg_touch_min</item>
-        <item name="android:minHeight">@dimen/sg_touch_min</item>
-        <item name="android:padding">0dp</item>
+        <item name="android:minHeight">@dimen/sg_btn_outline_h</item>
+        <item name="android:paddingStart">@dimen/sg_btn_outline_pad_h</item>
+        <item name="android:paddingEnd">@dimen/sg_btn_outline_pad_h</item>
+        <item name="android:background">@drawable/bg_pill_outline</item>
+        <item name="android:stateListAnimator">@null</item>
+        <item name="android:elevation">0dp</item>
+        <item name="android:textAllCaps">false</item>
         <item name="android:textColor">@color/sg_accent</item>
-        <item name="android:textSize">@dimen/sg_text_title</item>
+        <item name="android:textSize">@dimen/sg_ts_outline</item>
+        <item name="android:textFontWeight">500</item>
+    </style>
+
+    <!-- Destructive full-width text button: 52 dp, #F2A39C on transparent. -->
+    <style name="SgButtonDestructive">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">@dimen/sg_btn_destructive_h</item>
+        <item name="android:layout_marginTop">@dimen/sg_gap</item>
+        <item name="android:minHeight">@dimen/sg_btn_destructive_h</item>
+        <item name="android:background">@drawable/bg_btn_destructive</item>
+        <item name="android:stateListAnimator">@null</item>
+        <item name="android:elevation">0dp</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:textColor">@color/sg_destructive</item>
+        <item name="android:textSize">@dimen/sg_ts_body</item>
+        <item name="android:textFontWeight">500</item>
+    </style>
+
+    <!-- Stepper "−" / "+": 48 dp hit area, 44 dp visible circle. -->
+    <style name="SgStepButton">
+        <item name="android:layout_width">@dimen/sg_stepper_hit</item>
+        <item name="android:layout_height">@dimen/sg_stepper_hit</item>
+        <item name="android:minWidth">@dimen/sg_stepper_hit</item>
+        <item name="android:minHeight">@dimen/sg_stepper_hit</item>
+        <item name="android:padding">0dp</item>
+        <item name="android:background">@drawable/bg_stepper</item>
+        <item name="android:stateListAnimator">@null</item>
+        <item name="android:elevation">0dp</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:textColor">@color/sg_text_primary</item>
+        <item name="android:textSize">@dimen/sg_ts_stepper</item>
+        <item name="android:gravity">center</item>
+    </style>
+
+    <!-- Settings switch row: text left, switch right, min 56 dp. -->
+    <style name="SgSwitch">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:minHeight">@dimen/sg_row_switch_min</item>
+        <item name="android:thumb">@drawable/sg_switch_thumb</item>
+        <item name="android:track">@drawable/sg_switch_track</item>
+        <item name="android:splitTrack">false</item>
+        <item name="android:showText">false</item>
+        <item name="android:switchMinWidth">@dimen/sg_switch_min_w</item>
+        <item name="android:switchPadding">12dp</item>
+        <item name="android:background">?android:attr/selectableItemBackground</item>
+        <item name="android:textColor">@color/sg_text_primary</item>
+        <item name="android:textSize">@dimen/sg_ts_body</item>
+    </style>
+
+    <!-- v1 name, kept only so the v1 layout still links until ui-main replaces it. -->
+    <style name="SgNightRow">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:textColor">@color/sg_text_primary</item>
+        <item name="android:textSize">@dimen/sg_ts_body</item>
     </style>
 </resources>

@@ -50,7 +50,7 @@ DEV_OBJS  := $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(DEV_SRC))
 TEST_SRC  := $(wildcard tests/*.c)
 TEST_HDRS := $(wildcard tests/*.h)
 INC_HDRS  := $(wildcard $(INC_DIR)/*.h)
-JAVA_SRC  := $(addprefix $(JAVA_DIR)/,$(addsuffix .java,Native Sg SystemReceiver AlarmReceiver ActionReceiver MainActivity))
+JAVA_SRC  := $(addprefix $(JAVA_DIR)/,$(addsuffix .java,Native Sg SystemReceiver AlarmReceiver ActionReceiver MainActivity SettingsActivity))
 RES_FILES := $(shell find $(RES_DIR) -type f 2>/dev/null)
 
 # Device flags: exactly the S6 set from docs/ADVICE-architecture.md section 6.

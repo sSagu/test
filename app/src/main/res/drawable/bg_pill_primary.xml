@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Primary pill (enabled "Me voy a dormir"): accent fill, fully rounded, ripple. -->
+<ripple xmlns:android="http://schemas.android.com/apk/res/android"
+    android:color="@color/sg_ripple_on_accent">
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="@color/sg_accent" />
+            <corners android:radius="@dimen/sg_pill_radius" />
+        </shape>
+    </item>
+</ripple>

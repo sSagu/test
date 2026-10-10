@@ -21,7 +21,7 @@ enum {
     SG_CMD_CANCEL_ALARM  = 2,
     /* a0 = notification kind (SG_NK_*), a1 = text variant (SG_TXT_*), a2..a4 = args
      * (minute-of-day 0..1439 for times, minutes for durations), a5 = action bitmask
-     * (SG_ACT_*), a6 = timeout minutes */
+     * (SG_ACT_*) OR'ed with post flags (SG_NOTIFY_*), a6 = timeout minutes */
     SG_CMD_NOTIFY        = 3,
     /* a0 = notification kind (SG_NK_*) */
     SG_CMD_CANCEL_NOTIFY = 4
@@ -68,6 +68,12 @@ enum {
 /* action buttons bitmask (a5) */
 #define SG_ACT_SLEEP   (1 << 0)   /* "Me voy a dormir" -> ActionReceiver, SG_ACTION_SLEEP */
 #define SG_ACT_SNOOZE  (1 << 1)   /* "En 15 min"       -> ActionReceiver, SG_ACTION_SNOOZE */
+
+/* v2 post flags, also carried in a5 (bits 8+ never collide with SG_ACT_*).
+ * SG_NOTIFY_SILENT: post without sound, vibration or heads-up; Java maps it to
+ * Notification.Builder#setSilent(true). Used only by the reboot re-post of F1
+ * (docs/ADVICE-v2.md section 4). */
+#define SG_NOTIFY_SILENT (1 << 8)
 
 /* action ids delivered back via sg_core_action() */
 enum {

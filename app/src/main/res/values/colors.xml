@@ -1,9 +1,47 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Design tokens from docs/design/README.md (approved v2). Contract file: operators do not edit. -->
 <resources>
+    <!-- v1 names kept (theme, launcher icon) -->
     <color name="sg_black">#000000</color>
-    <color name="sg_text">#E6E6E6</color>
-    <color name="sg_text_dim">#9AA0A6</color>
+    <color name="sg_text">#EDEDED</color>
+    <color name="sg_text_dim">#A8A8B0</color>
     <color name="sg_accent">#8AB4F8</color>
-    <color name="sg_surface">#101014</color>
+    <color name="sg_surface">#141416</color>
     <color name="sg_ic_launcher_background">#000000</color>
+
+    <!-- ground and surfaces -->
+    <color name="sg_ground">#000000</color>
+    <color name="sg_card">#141416</color>
+    <color name="sg_divider">#26262B</color>
+
+    <!-- text -->
+    <color name="sg_text_primary">#EDEDED</color>
+    <color name="sg_text_strong">#F4F4F6</color>
+    <color name="sg_text_secondary">#C8C8D0</color>
+    <color name="sg_text_muted">#A8A8B0</color>
+    <color name="sg_text_foot">#8A8A92</color>
+
+    <!-- accent -->
+    <color name="sg_on_accent">#0B1A33</color>
+
+    <!-- chart -->
+    <color name="sg_bar">#5B8DE6</color>
+    <color name="sg_baseline">#2E2E34</color>
+    <color name="sg_target_line">#6B6B73</color>
+    <color name="sg_bar_empty">#4A4A52</color>
+
+    <!-- buttons -->
+    <color name="sg_disabled_fill">#101012</color>
+    <color name="sg_disabled_stroke">#2A2A30</color>
+    <color name="sg_outline">#3A3A42</color>
+    <color name="sg_destructive">#F2A39C</color>
+    <color name="sg_destructive_stroke">#3A2A2A</color>
+
+    <!-- switch -->
+    <color name="sg_switch_off">#3A3A42</color>
+    <color name="sg_thumb_off">#C8C8D0</color>
+
+    <!-- ripples -->
+    <color name="sg_ripple">#33FFFFFF</color>
+    <color name="sg_ripple_on_accent">#330B1A33</color>
 </resources>

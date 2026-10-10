@@ -28,6 +28,7 @@ public final class Native {
             ALARM_F5_HINT = 5, ALARM_F5_NOALARM = 6, ALARM_HOUSEKEEP = 7;
     public static final int NK_F1 = 1, NK_F2 = 2, NK_F3 = 3, NK_F5 = 5;
     public static final int ACT_SLEEP = 1, ACT_SNOOZE = 2;          // bitmask in a5
+    public static final int NOTIFY_SILENT = 1 << 8;                 // a5 flag -> Notification.Builder#setSilent(true)
     public static final int ACTION_SLEEP = 1, ACTION_SNOOZE = 2;    // ids for nativeAction
 
     // settings keys (sg_core.h SG_SET_*)
@@ -39,8 +40,24 @@ public final class Native {
     public static final int UI_ALARM_REL = 0, UI_NEXT_ALARM_MS = 1, UI_ALARM_MOD = 2, UI_ALARM_DATE = 3,
             UI_NEXT_REMINDER_MS = 4, UI_REMINDER_KIND = 5, UI_BED_SUGGEST_MOD = 6, UI_JETLAG_STATUS = 7,
             UI_JETLAG_DELTA = 8, UI_WEEKDAY_REF_MOD = 9, UI_DEBT_MIN = 10, UI_LOGGED_COUNT = 11,
-            UI_SETTINGS = 12, UI_NIGHTS = 24, UI_NIGHT_WORDS = 6, UI_LEN = 66;
+            UI_SETTINGS = 12, UI_NIGHTS = 24, UI_NIGHT_WORDS = 6;
+    // v2 (appended; docs/ADVICE-v2.md section 3)
+    public static final int UI_HERO = 66, UI_ALARM_WDAY = 67, UI_REMIND_STATE = 68, UI_REMIND_MOD = 69,
+            UI_BED_STATE = 70, UI_BED_MOD = 71, UI_BED_CAN_UPDATE = 72, UI_DEBT_STATE = 73,
+            UI_NOTIF_BANNER = 74, UI_ASK_NOTIF = 75, UI_TARGET_PERMILLE = 76, UI_LABEL_NIGHT = 77,
+            UI_BARS = 78, UI_LEN = 85;
+    // night word offsets inside each UI_NIGHT_WORDS block
+    public static final int NIGHT_DATE = 0, NIGHT_WDAY = 1, NIGHT_STATUS = 2, NIGHT_BED_MOD = 3,
+            NIGHT_WAKE_MOD = 4, NIGHT_EST_MIN = 5;
+    public static final int NIGHT_EMPTY = 0, NIGHT_LOGGED = 1, NIGHT_NOWAKE = 2;
     public static final int REL_NONE = 0, REL_OK = 1, REL_OTHER_APP = 2, REL_WINDOW = 3, REL_HORIZON = 4;
+    public static final int HERO_NO_ALARM = 0, HERO_ALARM = 1, HERO_OTHER_APP = 2, HERO_OUT_OF_WINDOW = 3,
+            HERO_FAR = 4, HERO_DISABLED = 5;
+    public static final int REMIND_HIDDEN = 0, REMIND_UPCOMING = 1, REMIND_SENT = 2, REMIND_NONE = 3;
+    public static final int BED_HIDDEN = 0, BED_BEFORE = 1, BED_AVAILABLE = 2, BED_LOGGED = 3, BED_CLOSED = 4;
+    public static final int DEBT_EMPTY = 0, DEBT_ZERO = 1, DEBT_SOME = 2;
+    /** Bars and the target line map linearly: height = permille * chartPlotPx / PERMILLE_FULL. */
+    public static final int PERMILLE_FULL = 1000;
 
     /** Load state from statePath (getFilesDir()+"/sg_state.bin"). Returns SG_STORE_* code
      *  (0 ok, 1 no file yet, 2 io, 3 corrupt -> defaults in use). Idempotent. */

@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Sizes from docs/design/README.md and the two mockups (frame 412x892 dp). Contract file. -->
 <resources>
-    <dimen name="sg_gutter">16dp</dimen>
+    <!-- v1 names kept -->
+    <dimen name="sg_gutter">20dp</dimen>
     <dimen name="sg_touch_min">48dp</dimen>
     <dimen name="sg_space_section">24dp</dimen>
     <dimen name="sg_space_row">12dp</dimen>
@@ -8,4 +10,71 @@
     <dimen name="sg_text_title">18sp</dimen>
     <dimen name="sg_text_big">20sp</dimen>
     <dimen name="sg_text_small">14sp</dimen>
+
+    <!-- screen -->
+    <dimen name="sg_screen_pad_h">20dp</dimen>
+    <dimen name="sg_screen_pad_top">8dp</dimen>
+    <dimen name="sg_screen_pad_bottom">24dp</dimen>
+    <dimen name="sg_gap">16dp</dimen>
+    <dimen name="sg_topbar_h">56dp</dimen>
+    <dimen name="sg_back_offset">-12dp</dimen>
+
+    <!-- cards -->
+    <dimen name="sg_card_radius">24dp</dimen>
+    <dimen name="sg_card_pad">20dp</dimen>
+    <dimen name="sg_card_pad_settings_v">8dp</dimen>
+    <dimen name="sg_card_gap">16dp</dimen>
+    <dimen name="sg_divider_h">1dp</dimen>
+
+    <!-- hero -->
+    <dimen name="sg_hero_row_min">32dp</dimen>
+    <dimen name="sg_hero_row_gap">12dp</dimen>
+    <dimen name="sg_icon">24dp</dimen>
+    <dimen name="sg_icon_row">20dp</dimen>
+    <dimen name="sg_icon_button">22dp</dimen>
+    <dimen name="sg_badge">40dp</dimen>
+
+    <!-- buttons -->
+    <dimen name="sg_pill_h">64dp</dimen>
+    <dimen name="sg_pill_radius">32dp</dimen>
+    <dimen name="sg_pill_gap">10dp</dimen>
+    <dimen name="sg_btn_outline_h">48dp</dimen>
+    <dimen name="sg_btn_outline_pad_h">16dp</dimen>
+    <dimen name="sg_btn_destructive_h">52dp</dimen>
+    <dimen name="sg_stepper_hit">48dp</dimen>
+    <dimen name="sg_stepper_value_min_w">88dp</dimen>
+
+    <!-- chart: plot scale 0..10 h over sg_chart_plot_h -->
+    <dimen name="sg_chart_h">132dp</dimen>
+    <dimen name="sg_chart_plot_h">120dp</dimen>
+    <dimen name="sg_bar_w">20dp</dimen>
+    <dimen name="sg_bar_gap">2dp</dimen>
+    <dimen name="sg_bar_min_h">2dp</dimen>
+    <dimen name="sg_bar_label_gap">4dp</dimen>
+    <dimen name="sg_empty_w">12dp</dimen>
+    <dimen name="sg_empty_h">2dp</dimen>
+    <dimen name="sg_baseline_h">1dp</dimen>
+    <dimen name="sg_target_line_h">2dp</dimen>
+
+    <!-- settings rows -->
+    <dimen name="sg_row_stepper_min">72dp</dimen>
+    <dimen name="sg_row_switch_min">56dp</dimen>
+    <dimen name="sg_switch_min_w">52dp</dimen>
+
+    <!-- text sizes -->
+    <dimen name="sg_ts_title">22sp</dimen>
+    <dimen name="sg_ts_alarm">64sp</dimen>
+    <dimen name="sg_ts_label">14sp</dimen>
+    <dimen name="sg_ts_row">15sp</dimen>
+    <dimen name="sg_ts_row_value">17sp</dimen>
+    <dimen name="sg_ts_button">18sp</dimen>
+    <dimen name="sg_ts_section">16sp</dimen>
+    <dimen name="sg_ts_body">16sp</dimen>
+    <dimen name="sg_ts_small">13sp</dimen>
+    <dimen name="sg_ts_chart">12sp</dimen>
+    <dimen name="sg_ts_debt">20sp</dimen>
+    <dimen name="sg_ts_hero_msg">20sp</dimen>
+    <dimen name="sg_ts_outline">15sp</dimen>
+    <dimen name="sg_ts_stepper">22sp</dimen>
+    <dimen name="sg_ts_foot">12sp</dimen>
 </resources>
